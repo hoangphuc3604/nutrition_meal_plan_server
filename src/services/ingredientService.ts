@@ -1,6 +1,7 @@
 import { Repository } from "typeorm";
 import Database from "../config/database";
 import { Ingredient, FoodCategory } from "../models";
+import { CategoryService } from "./categoryService";
 
 /**
  * Ingredient Service
@@ -10,10 +11,12 @@ import { Ingredient, FoodCategory } from "../models";
 export class IngredientService {
   private ingredientRepo: Repository<Ingredient>;
   private foodCategoryRepo: Repository<FoodCategory>;
+  private categoryService: CategoryService;
 
   constructor() {
     this.ingredientRepo = Database.getRepository(Ingredient) as Repository<Ingredient>;
     this.foodCategoryRepo = Database.getRepository(FoodCategory) as Repository<FoodCategory>;
+    this.categoryService = new CategoryService();
   }
 
   /**
@@ -22,11 +25,13 @@ export class IngredientService {
    * 
    * @param ingredientName - Name of the ingredient
    * @param queryRunner - Optional query runner for transaction support
+   * @param categoryName - Optional category name (if not provided, uses "Other")
    * @returns Promise<Ingredient>
    */
   async findOrCreateIngredient(
     ingredientName: string,
-    queryRunner?: any
+    queryRunner?: any,
+    categoryName?: string
   ): Promise<Ingredient> {
     const manager = queryRunner ? queryRunner.manager : this.ingredientRepo.manager;
     
@@ -39,30 +44,28 @@ export class IngredientService {
     if (!ingredient) {
       console.log(`[INFO] - Creating new ingredient: ${ingredientName}`);
       
-      // Find or create default category
-      let defaultCategory = await manager.findOne(FoodCategory, {
-        where: { name: "Other" }
-      });
-
-      if (!defaultCategory) {
-        console.log(`[INFO] - Creating default category: Other`);
-        defaultCategory = new FoodCategory();
-        defaultCategory.name = "Other";
-        defaultCategory.description = "Default category for AI generated ingredients";
-        defaultCategory.is_active = true;
-        defaultCategory = await manager.save(FoodCategory, defaultCategory);
-      }
+      // Find or create category
+      const finalCategoryName = categoryName || "Other";
+      const category = await this.categoryService.findOrCreateCategory(
+        finalCategoryName,
+        queryRunner
+      );
 
       // Create new ingredient
       ingredient = new Ingredient();
       ingredient.name = ingredientName;
-      ingredient.category = defaultCategory;
+      ingredient.category = category;
       ingredient.description = `AI generated ingredient: ${ingredientName}`;
       ingredient.storage_temperature = "room_temp";
       ingredient.is_active = true;
 
       ingredient = await manager.save(Ingredient, ingredient);
-      console.log(`[SUCCESS] - Created ingredient: ${ingredient.name} (${ingredient.id})`);
+      console.log(`[SUCCESS] - Created ingredient: ${ingredient.name} (${ingredient.id}) with category: ${category.name}`);
+    } else {
+      // If ingredient exists but category is provided and different, optionally update it
+      if (categoryName && ingredient.category?.name !== categoryName) {
+        console.log(`[INFO] - Ingredient ${ingredientName} already exists with category ${ingredient.category?.name}`);
+      }
     }
 
     return ingredient;

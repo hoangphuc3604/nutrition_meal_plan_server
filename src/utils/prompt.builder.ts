@@ -4,70 +4,94 @@ import { UserProfile } from "../models/user_profile.model";
  * Interface for already-generated recipes in current session
  */
 export interface GeneratedRecipe {
-  name: string;
-  date: string;
-  meal_type: string;
-  main_ingredients: string[];
+    name: string;
+    date: string;
+    meal_type: string;
+    main_ingredients: string[];
 }
 
 /**
  * Build prompt for generating A SINGLE DAY meal plan
- * Creates NEW recipes with full details (ingredients, instructions, nutrition)
+ * Creates               "servings": 2,
+              "ingredients": [
+                { 
+                  "name": "string", 
+                  "quantity": 100, 
+                  "unit": "g",
+                  "category_name": "string (from available categories or new category)"
+                }
+              ],
+              "instructions": "string (2-3 steps)",es with full details (ingredients, instructions, nutrition)
  * This is used for iterative day-by-day generation to avoid token limits
  * 
  * @param profile - User profile
  * @param date - Date to generate for (YYYY-MM-DD)
  * @param recipeHistory - Historical recipes from database
  * @param currentSessionRecipes - Recipes already generated in this session (for uniqueness)
+ * @param availableCategories - List of existing food categories from database
  */
 export function buildSingleDayMealPlanPrompt(
-  profile: Partial<UserProfile>,
-  date: string,
-  recipeHistory?: any[],
-  currentSessionRecipes?: GeneratedRecipe[]
+    profile: Partial<UserProfile>,
+    date: string,
+    recipeHistory?: any[],
+    currentSessionRecipes?: GeneratedRecipe[],
+    availableCategories?: Array<{ id: string; name: string; name_en?: string }>
 ): string {
-  const {
-    height,
-    weight,
-    age,
-    gender,
-    health_goal,
-    activity_level,
-    daily_calorie_target,
-    allergies,
-    dietary_preferences,
-  } = profile as any;
+    const {
+        height,
+        weight,
+        age,
+        gender,
+        health_goal,
+        activity_level,
+        daily_calorie_target,
+        allergies,
+        dietary_preferences,
+    } = profile as any;
 
-  // Build list of recipes to avoid
-  const recipesToAvoid: string[] = [];
-  
-  // Add historical recipes
-  if (recipeHistory && recipeHistory.length > 0) {
-    recipeHistory.forEach(plan => {
-      if (plan.mealPlanItems) {
-        plan.mealPlanItems.forEach((item: any) => {
-          if (item.recipe?.name) {
-            recipesToAvoid.push(item.recipe.name);
-          }
+    // Build list of recipes to avoid
+    const recipesToAvoid: string[] = [];
+
+    // Add historical recipes
+    if (recipeHistory && recipeHistory.length > 0) {
+        recipeHistory.forEach((plan) => {
+            if (plan.mealPlanItems) {
+                plan.mealPlanItems.forEach((item: any) => {
+                    if (item.recipe?.name) {
+                        recipesToAvoid.push(item.recipe.name);
+                    }
+                });
+            }
         });
-      }
-    });
-  }
+    }
 
-  // Add recipes from current generation session
-  if (currentSessionRecipes && currentSessionRecipes.length > 0) {
-    currentSessionRecipes.forEach(recipe => {
-      recipesToAvoid.push(recipe.name);
-      // Also add main ingredients to avoid similar dishes
-      if (recipe.main_ingredients) {
-        recipesToAvoid.push(...recipe.main_ingredients);
-      }
-    });
-  }
+    // Add recipes from current generation session
+    if (currentSessionRecipes && currentSessionRecipes.length > 0) {
+        currentSessionRecipes.forEach((recipe) => {
+            recipesToAvoid.push(recipe.name);
+            // Also add main ingredients to avoid similar dishes
+            if (recipe.main_ingredients) {
+                recipesToAvoid.push(...recipe.main_ingredients);
+            }
+        });
+    }
 
-  const uniqueRecipesToAvoid = [...new Set(recipesToAvoid)];
+    const uniqueRecipesToAvoid = [...new Set(recipesToAvoid)];
 
-  return `
+    // Format categories for AI
+    const categoriesText =
+        availableCategories && availableCategories.length > 0
+            ? availableCategories
+                  .map(
+                      (cat) =>
+                          `   - ${cat.name}${
+                              cat.name_en ? ` (${cat.name_en})` : ""
+                          }`
+                  )
+                  .join("\n")
+            : "   - No existing categories found";
+
+    return `
 You are a professional nutrition assistant. Your task is to create a meal plan for EXACTLY ONE DAY: ${date}.
 
 CRITICAL REQUIREMENTS:
@@ -78,12 +102,32 @@ CRITICAL REQUIREMENTS:
    - Culturally diverse across breakfast, lunch, and dinner
 
 2. **RECIPES TO ABSOLUTELY AVOID** (${uniqueRecipesToAvoid.length} recipes):
-${uniqueRecipesToAvoid.length > 0 ? uniqueRecipesToAvoid.map(name => `   - ${name}`).join('\n') : '   - None'}
+${
+    uniqueRecipesToAvoid.length > 0
+        ? uniqueRecipesToAvoid.map((name) => `   - ${name}`).join("\n")
+        : "   - None"
+}
+
+3. **AVAILABLE FOOD CATEGORIES** (${
+        availableCategories?.length || 0
+    } categories):
+${categoriesText}
+   **IMPORTANT**: When specifying ingredients, assign each ingredient a "category_name" from the list above. 
+   If you need a category that doesn't exist, you can create a new one with a descriptive name.
+   Examples: "Vegetables", "Meat & Poultry", "Seafood", "Grains & Cereals", "Dairy & Eggs", "Fruits", "Herbs & Spices", etc.
 
 KNOWLEDGE BASE:
 - User Profile: ${JSON.stringify(profile, null, 2)}
-- Eating History (DO NOT DUPLICATE): ${recipeHistory ? JSON.stringify(recipeHistory.slice(0, 2), null, 2) : 'None'}
-- Current Session Recipes (ALREADY GENERATED, MUST BE DIFFERENT): ${currentSessionRecipes ? JSON.stringify(currentSessionRecipes, null, 2) : 'None'}
+- Eating History (DO NOT DUPLICATE): ${
+        recipeHistory
+            ? JSON.stringify(recipeHistory.slice(0, 2), null, 2)
+            : "None"
+    }
+- Current Session Recipes (ALREADY GENERATED, MUST BE DIFFERENT): ${
+        currentSessionRecipes
+            ? JSON.stringify(currentSessionRecipes, null, 2)
+            : "None"
+    }
 
 User Profile Summary:
 - Height: ${height ?? "unknown"} cm
@@ -93,8 +137,14 @@ User Profile Summary:
 - Health goal: ${health_goal ?? "maintain"}
 - Activity level: ${activity_level ?? "moderate"}
 - Daily calorie target: ${daily_calorie_target ?? "not provided"} kcal
-- Allergies: ${Array.isArray(allergies) ? allergies.join(", ") : (allergies || "None")}
-- Dietary preferences: ${Array.isArray(dietary_preferences) ? dietary_preferences.join(", ") : (dietary_preferences || "None")}
+- Allergies: ${
+        Array.isArray(allergies) ? allergies.join(", ") : allergies || "None"
+    }
+- Dietary preferences: ${
+        Array.isArray(dietary_preferences)
+            ? dietary_preferences.join(", ")
+            : dietary_preferences || "None"
+    }
 
 Requirements:
 1. Plan for EXACTLY ONE DAY: ${date}
@@ -155,7 +205,7 @@ RESPONSE FORMAT (ONLY this JSON):
               "cook_time_minutes": 10,
               "servings": 2,
               "ingredients": [
-                { "name": "string", "quantity": 100, "unit": "g" }
+                { "name": "string", "quantity": 100, "unit": "g", "category_name": "string" }
               ],
               "instructions": "string (2-3 steps)",
               "nutritional_info": {
@@ -174,7 +224,7 @@ RESPONSE FORMAT (ONLY this JSON):
               "prep_time_minutes": 5,
               "cook_time_minutes": 10,
               "servings": 2,
-              "ingredients": [{ "name": "string", "quantity": 100, "unit": "g" }],
+              "ingredients": [{ "name": "string", "quantity": 100, "unit": "g", "category_name": "string" }],
               "instructions": "string",
               "nutritional_info": { "calories": 400, "protein": 20, "carbs": 50, "fats": 10 }
             },
@@ -187,7 +237,7 @@ RESPONSE FORMAT (ONLY this JSON):
               "prep_time_minutes": 5,
               "cook_time_minutes": 10,
               "servings": 2,
-              "ingredients": [{ "name": "string", "quantity": 100, "unit": "g" }],
+              "ingredients": [{ "name": "string", "quantity": 100, "unit": "g", "category_name": "string" }],
               "instructions": "string",
               "nutritional_info": { "calories": 400, "protein": 20, "carbs": 50, "fats": 10 }
             }
@@ -223,40 +273,44 @@ RESPONSE FORMAT (ONLY this JSON):
 /**
  * Build prompt for generating remaining days of meal plan
  * Creates NEW recipes with full details (ingredients, instructions, nutrition)
- * 
+ *
  * @deprecated Use buildSingleDayMealPlanPrompt for better token management
  */
 export function buildWeeklyMealPlanPrompt(
-  profile: Partial<UserProfile>,
-  startDate: string,
-  numDays: number = 6,
-  recipeHistory?: any[]
+    profile: Partial<UserProfile>,
+    startDate: string,
+    numDays: number = 6,
+    recipeHistory?: any[]
 ): string {
-  const {
-    height,
-    weight,
-    age,
-    gender,
-    health_goal,
-    activity_level,
-    daily_calorie_target,
-    allergies,
-    dietary_preferences,
-  } = profile as any;
+    const {
+        height,
+        weight,
+        age,
+        gender,
+        health_goal,
+        activity_level,
+        daily_calorie_target,
+        allergies,
+        dietary_preferences,
+    } = profile as any;
 
-  // Calculate dates for the specified number of days
-  const dates = Array.from({ length: numDays }, (_, i) => {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
-    return date.toISOString().split("T")[0];
-  });
+    // Calculate dates for the specified number of days
+    const dates = Array.from({ length: numDays }, (_, i) => {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + i);
+        return date.toISOString().split("T")[0];
+    });
 
-  return `
+    return `
 You are a professional nutrition assistant. Your task is to create meal plans for ${numDays} DAYS.
 
 KNOWLEDGE BASE:
 - User Profile: ${JSON.stringify(profile, null, 2)}
-- Eating History (MUST AVOID DUPLICATING): ${JSON.stringify(recipeHistory?.[0], null, 2)}
+- Eating History (MUST AVOID DUPLICATING): ${JSON.stringify(
+        recipeHistory?.[0],
+        null,
+        2
+    )}
 
 **IMPORTANT**: The Eating History contains recipes the user has already consumed. You MUST create entirely different recipes that are NOT similar to any dishes listed in the Eating History above.
 
@@ -268,8 +322,14 @@ User Profile Summary:
 - Health goal: ${health_goal ?? "maintain"}
 - Activity level: ${activity_level ?? "moderate"}
 - Daily calorie target: ${daily_calorie_target ?? "not provided"} kcal
-- Allergies: ${Array.isArray(allergies) ? allergies.join(", ") : (allergies || "None")}
-- Dietary preferences: ${Array.isArray(dietary_preferences) ? dietary_preferences.join(", ") : (dietary_preferences || "None")}
+- Allergies: ${
+        Array.isArray(allergies) ? allergies.join(", ") : allergies || "None"
+    }
+- Dietary preferences: ${
+        Array.isArray(dietary_preferences)
+            ? dietary_preferences.join(", ")
+            : dietary_preferences || "None"
+    }
 
 Requirements:
 1. Plan for EXACTLY ${numDays} days: ${dates.join(", ")}
@@ -393,7 +453,11 @@ RESPONSE FORMAT (ONLY this JSON):
           ]
         }
       ]
-    }${numDays > 1 ? ',\n    // Repeat for remaining ' + (numDays - 1) + ' days' : ''}
+    }${
+        numDays > 1
+            ? ",\n    // Repeat for remaining " + (numDays - 1) + " days"
+            : ""
+    }
   ]
 }`;
 }
@@ -402,20 +466,20 @@ RESPONSE FORMAT (ONLY this JSON):
  * Helper to calculate dates for a week
  */
 export function getWeekDates(startDate: Date): string[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
-    return date.toISOString().split("T")[0];
-  });
+    return Array.from({ length: 7 }, (_, i) => {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + i);
+        return date.toISOString().split("T")[0];
+    });
 }
 
 /**
  * Get start of week (Monday)
  */
 export function getStartOfWeek(date: Date): Date {
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(date.setDate(diff));
-  monday.setHours(0, 0, 0, 0);
-  return monday;
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(date.setDate(diff));
+    monday.setHours(0, 0, 0, 0);
+    return monday;
 }

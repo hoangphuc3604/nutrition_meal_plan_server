@@ -9,12 +9,11 @@ const router = Router();
  * This server generates days 2-7 of weekly meal plans
  */
 
-// Public route - status check
 router.get("/status", mealPlanController.getStatus);
-
-// Protected routes - require authentication
-
-// Generate remaining 6 days for current week
-router.post("/generate", authMiddleware, mealPlanController.generateRemainingDays);
+router.post(
+    "/generate",
+    authMiddleware,
+    mealPlanController.generateRemainingDays
+);
 
 export default router;
