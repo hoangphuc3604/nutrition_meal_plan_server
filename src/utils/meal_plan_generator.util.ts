@@ -66,8 +66,8 @@ class MealPlanGeneratorUtil {
                 success: true,
                 data: {
                     mealPlanId: result.mealPlanId,
-                    startDate: weekStartStr,
-                    endDate: weekEndStr,
+                    startDate: result.startDate,
+                    endDate: result.endDate,
                     daysGenerated: numDays,
                     message: result.message,
                 },
