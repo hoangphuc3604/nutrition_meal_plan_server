@@ -5,12 +5,22 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 const PORT = process.env.PORT || 3001;
+const ENABLE_WORKER = process.env.ENABLE_WORKER === "true";
 
 const startServer = async () => {
   try {
     // Initialize database
     await Database.init();
     console.log("[SUCCESS] - Database connected successfully");
+
+    // Start BullMQ Worker if enabled
+    if (ENABLE_WORKER) {
+      console.log("[INFO] - Starting BullMQ Worker...");
+      require("./workers/mealPlanWorker");
+      console.log("[SUCCESS] - BullMQ Worker started successfully");
+    } else {
+      console.log("[INFO] - Worker disabled (ENABLE_WORKER=false)");
+    }
 
     // Start Express server
     app.listen(PORT, () => {
@@ -21,6 +31,7 @@ const startServer = async () => {
 ║     http://localhost:${PORT}                     ║
 ║     Health: http://localhost:${PORT}/health      ║
 ║     API: http://localhost:${PORT}/api/meal-plan  ║
+║     Worker: ${ENABLE_WORKER ? "✅ ENABLED" : "❌ DISABLED"}                    ║
 ╚═══════════════════════════════════════════════╝
       `);
     });
