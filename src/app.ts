@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import mealPlanRoutes from "./routes/mealPlan.routes";
-
+import upload from "./config/multer.config";
 const app = express();
 
 // CORS configuration
@@ -47,7 +47,18 @@ app.get('/health', (req: Request, res: Response) => {
     timestamp: new Date().toISOString()
   });
 });
-
+app.post("/single", upload.single("image"), (req: Request, res: Response) => {
+  try {
+    const file = req.file as Express.Multer.File & { path: string };
+    return res.json({
+      success: true,
+      url: file?.path,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Upload failed" });
+  }
+});
 // Routes
 app.use('/api/meal-plan', mealPlanRoutes);
 
