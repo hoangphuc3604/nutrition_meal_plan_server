@@ -4,6 +4,7 @@ import helmet from "helmet";
 import compression from "compression";
 import mealPlanRoutes from "./routes/mealPlan.routes";
 import upload from "./config/multer.config";
+import path from "path";
 const app = express();
 
 // CORS configuration
@@ -47,6 +48,7 @@ app.get('/health', (req: Request, res: Response) => {
     timestamp: new Date().toISOString()
   });
 });
+app.use("/nutrition-images", express.static(path.join(__dirname, "../src/images")));
 app.post("/single", upload.single("image"), (req: Request, res: Response) => {
   try {
     const file = req.file as Express.Multer.File & { path: string };
@@ -60,6 +62,7 @@ app.post("/single", upload.single("image"), (req: Request, res: Response) => {
   }
 });
 // Routes
+
 app.use('/api/meal-plan', mealPlanRoutes);
 
 // 404 handler

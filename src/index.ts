@@ -1,6 +1,7 @@
 import app from "./app";
 import Database from "./config/database";
 import * as dotenv from "dotenv";
+import { initWorkers, closeWorkers } from "./workers/index";
 
 dotenv.config();
 
@@ -16,7 +17,7 @@ const startServer = async () => {
     // Start BullMQ Worker if enabled
     if (ENABLE_WORKER) {
       console.log("[INFO] - Starting BullMQ Worker...");
-      require("./workers/mealPlanWorker");
+      await initWorkers();
       console.log("[SUCCESS] - BullMQ Worker started successfully");
     } else {
       console.log("[INFO] - Worker disabled (ENABLE_WORKER=false)");
@@ -44,6 +45,7 @@ const startServer = async () => {
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   console.log("[INFO] - SIGTERM received, shutting down gracefully");
+  await closeWorkers();
   process.exit(0);
 });
 
