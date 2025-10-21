@@ -116,6 +116,14 @@ export class IngredientService {
       .orderBy("ingredient.name", "ASC")
       .getMany();
   }
+  async updateIngredient(id: string, partialIngredient: Partial<Ingredient>): Promise<Ingredient> {
+    const ingredient = await this.getIngredientById(id);
+    if (!ingredient) {
+      throw new Error("Ingredient not found");
+    }
+    Object.assign(ingredient, partialIngredient);
+    return this.ingredientRepo.save(ingredient);
+  }
 }
 
 export default new IngredientService();
