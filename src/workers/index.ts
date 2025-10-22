@@ -2,6 +2,8 @@ import { Redis } from "ioredis";
 import * as dotenv from "dotenv";
 import Database from "../config/database";
 import { handleUpdateImageWorker } from "./image.worker";
+import { handleUpdateRecipeImageWorker } from "./recipe.image.worker";
+import { handleMealPlanWorker } from "./mealPlanWorker";
 
 dotenv.config();
 
@@ -18,7 +20,11 @@ export const initWorkers = async () => {
   console.log("[SUCCESS] Database connected");
 
   if (workers.length === 0) {
-    workers = [handleUpdateImageWorker(connection)];
+    workers = [
+      handleUpdateImageWorker(connection),
+      handleUpdateRecipeImageWorker(connection),
+      handleMealPlanWorker(connection)
+    ];
   }
 
   console.log(`[INFO] Workers active: ${workers.length}`);

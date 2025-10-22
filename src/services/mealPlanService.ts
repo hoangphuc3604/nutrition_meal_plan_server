@@ -17,6 +17,13 @@ import {
 } from "../utils/prompt.builder";
 import { BadRequestError } from "../core/error.response";
 import { Repository } from "typeorm";
+import { getUnsplashImage } from "../utils/image_searching.util";
+import { Queue } from "bullmq";
+import { Redis } from "ioredis";
+import MessageQueueEnum from "../enums/message.enum";
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 /**
  * Interface for AI response - creates NEW recipes with full details
@@ -24,7 +31,7 @@ import { Repository } from "typeorm";
 interface AIRecipeResponse {
     name: string;
     description: string;
-    image_url: string;
+    searching: string; // Search terms for image generation
     cuisine_type: string;
     difficulty_level: "easy" | "medium" | "hard";
     prep_time_minutes: number;
@@ -32,6 +39,7 @@ interface AIRecipeResponse {
     servings: number;
     ingredients: Array<{
         name: string;
+        searching: string; // Search terms for ingredient image
         quantity: number;
         unit: string;
         category_name?: string; // Optional category name from AI
@@ -49,11 +57,41 @@ export class MealPlanService {
     private llmService: GoogleGeminiModel;
     private ingredientService: IngredientService;
     private categoryService: CategoryService;
+    private recipeImageQueue: Queue;
+    private ingredientImageQueue: Queue;
 
     constructor() {
         this.llmService = new GoogleGeminiModel();
         this.ingredientService = new IngredientService();
         this.categoryService = new CategoryService();
+        
+        // Initialize Redis connection and queues
+        const connection = new Redis({
+            host: process.env.REDIS_HOST || "localhost",
+            port: parseInt(process.env.REDIS_PORT || "6379"),
+            password: process.env.REDIS_PASSWORD || undefined,
+            maxRetriesPerRequest: null,
+        });
+
+        this.recipeImageQueue = new Queue(MessageQueueEnum.RECIPE_IMAGE_GENERATION, {
+            connection,
+            defaultJobOptions: {
+                attempts: 3,
+                backoff: { type: "exponential", delay: 2000 },
+                removeOnComplete: { age: 24 * 3600, count: 100 },
+                removeOnFail: { age: 7 * 24 * 3600 },
+            },
+        });
+
+        this.ingredientImageQueue = new Queue(MessageQueueEnum.IMAGE_GENERATION, {
+            connection,
+            defaultJobOptions: {
+                attempts: 3,
+                backoff: { type: "exponential", delay: 2000 },
+                removeOnComplete: { age: 24 * 3600, count: 100 },
+                removeOnFail: { age: 7 * 24 * 3600 },
+            },
+        });
     }
 
     /**
@@ -343,7 +381,7 @@ export class MealPlanService {
     }
 
     /**
-     * Create recipe from AI response
+     * Create recipe from AI response with image generation
      */
     private async createRecipeFromAI(
         aiRecipe: AIRecipeResponse,
@@ -354,9 +392,6 @@ export class MealPlanService {
         const recipe = new Recipe();
         recipe.name = aiRecipe.name;
         recipe.description = aiRecipe.description;
-        recipe.image_url =
-            aiRecipe.image_url ||
-            "https://via.placeholder.com/400x300?text=Recipe";
         recipe.cuisine_type = aiRecipe.cuisine_type;
         recipe.difficulty_level = aiRecipe.difficulty_level;
         recipe.prep_time_minutes = aiRecipe.prep_time_minutes;
@@ -368,16 +403,42 @@ export class MealPlanService {
         recipe.is_active = true;
         recipe.is_public = false;
 
+        // Generate image URL from Unsplash
+        try {
+            const imageUrl = await getUnsplashImage(aiRecipe.searching);
+            recipe.image_url = imageUrl || "https://via.placeholder.com/400x300?text=Recipe";
+        } catch (error) {
+            console.warn(`[RECIPE IMAGE] - Failed to fetch image for "${aiRecipe.searching}":`, error);
+            recipe.image_url = "https://via.placeholder.com/400x300?text=Recipe";
+        }
+
         const savedRecipe = await queryRunner.manager.save(Recipe, recipe);
+
+        // Enqueue image processing job if we got an image URL
+        if (recipe.image_url && recipe.image_url !== "https://via.placeholder.com/400x300?text=Recipe") {
+            try {
+                await this.recipeImageQueue.add("recipe_image_processed", {
+                    recipeId: savedRecipe.id,
+                    url: recipe.image_url
+                }, {
+                    jobId: `recipe_image_${savedRecipe.id}_${Date.now()}`,
+                    priority: 1,
+                });
+                console.log(`[RECIPE IMAGE] - Enqueued image processing job for recipe: ${savedRecipe.name}`);
+            } catch (error) {
+                console.error(`[RECIPE IMAGE] - Failed to enqueue image job for recipe ${savedRecipe.name}:`, error);
+            }
+        }
 
         // Create ingredients and recipe_ingredients using IngredientService
         for (let i = 0; i < aiRecipe.ingredients.length; i++) {
             const aiIngredient = aiRecipe.ingredients[i];
 
-            // Find or create ingredient using IngredientService with category
+            // Find or create ingredient using IngredientService with category and image search
             const ingredient =
                 await this.ingredientService.findOrCreateIngredient(
                     aiIngredient.name,
+                    aiIngredient.searching, // Pass searching term for image generation
                     queryRunner,
                     aiIngredient.category_name // Pass category name from AI
                 );

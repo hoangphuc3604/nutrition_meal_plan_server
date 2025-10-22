@@ -198,14 +198,14 @@ RESPONSE FORMAT (ONLY this JSON):
             {
               "name": "string (Vietnamese + English)",
               "description": "string",
-              "image_url": "https://via.placeholder.com/400x300?text=Recipe",
+              "searching": "string (2-3 words for image search)",
               "cuisine_type": "Vietnamese/Asian/Western/etc",
               "difficulty_level": "easy",
               "prep_time_minutes": 5,
               "cook_time_minutes": 10,
               "servings": 2,
               "ingredients": [
-                { "name": "string", "quantity": 100, "unit": "g", "category_name": "string" }
+                { "name": "string", "searching": "string (2-3 words)", "quantity": 100, "unit": "g", "category_name": "string" }
               ],
               "instructions": "string (2-3 steps)",
               "nutritional_info": {
@@ -218,26 +218,26 @@ RESPONSE FORMAT (ONLY this JSON):
             {
               "name": "string (recipe 2 - MUST BE DIFFERENT)",
               "description": "string",
-              "image_url": "https://via.placeholder.com/400x300?text=Recipe",
+              "searching": "string (2-3 words for image search)",
               "cuisine_type": "string (different from recipe 1)",
               "difficulty_level": "easy",
               "prep_time_minutes": 5,
               "cook_time_minutes": 10,
               "servings": 2,
-              "ingredients": [{ "name": "string", "quantity": 100, "unit": "g", "category_name": "string" }],
+              "ingredients": [{ "name": "string", "searching": "string (2-3 words)", "quantity": 100, "unit": "g", "category_name": "string" }],
               "instructions": "string",
               "nutritional_info": { "calories": 400, "protein": 20, "carbs": 50, "fats": 10 }
             },
             {
               "name": "string (recipe 3 - MUST BE DIFFERENT)",
               "description": "string",
-              "image_url": "https://via.placeholder.com/400x300?text=Recipe",
+              "searching": "string (2-3 words for image search)",
               "cuisine_type": "string (different from recipe 1 & 2)",
               "difficulty_level": "easy",
               "prep_time_minutes": 5,
               "cook_time_minutes": 10,
               "servings": 2,
-              "ingredients": [{ "name": "string", "quantity": 100, "unit": "g", "category_name": "string" }],
+              "ingredients": [{ "name": "string", "searching": "string (2-3 words)", "quantity": 100, "unit": "g", "category_name": "string" }],
               "instructions": "string",
               "nutritional_info": { "calories": 400, "protein": 20, "carbs": 50, "fats": 10 }
             }
@@ -375,7 +375,7 @@ RESPONSE FORMAT (ONLY this JSON):
             {
               "name": "string",
               "description": "string",
-              "image_url": "https://via.placeholder.com/400x300?text=Recipe",
+              "searching": "string (2-3 words for image search)",
               "cuisine_type": "string",
               "difficulty_level": "easy",
               "prep_time_minutes": 5,
@@ -384,6 +384,7 @@ RESPONSE FORMAT (ONLY this JSON):
               "ingredients": [
                 { 
                   "name": "string", 
+                  "searching": "string (2-3 words)",
                   "quantity": 100, 
                   "unit": "g"
                 }
@@ -399,14 +400,14 @@ RESPONSE FORMAT (ONLY this JSON):
             {
               "name": "string (recipe 2)",
               "description": "string",
-              "image_url": "https://via.placeholder.com/400x300?text=Recipe",
+              "searching": "string (2-3 words for image search)",
               "cuisine_type": "string",
               "difficulty_level": "easy",
               "prep_time_minutes": 5,
               "cook_time_minutes": 10,
               "servings": 2,
               "ingredients": [
-                { "name": "string", "quantity": 100, "unit": "g" }
+                { "name": "string", "searching": "string (2-3 words)", "quantity": 100, "unit": "g" }
               ],
               "instructions": "string",
               "nutritional_info": {
@@ -419,14 +420,14 @@ RESPONSE FORMAT (ONLY this JSON):
             {
               "name": "string (recipe 3)",
               "description": "string",
-              "image_url": "https://via.placeholder.com/400x300?text=Recipe",
+              "searching": "string (2-3 words for image search)",
               "cuisine_type": "string",
               "difficulty_level": "easy",
               "prep_time_minutes": 5,
               "cook_time_minutes": 10,
               "servings": 2,
               "ingredients": [
-                { "name": "string", "quantity": 100, "unit": "g" }
+                { "name": "string", "searching": "string (2-3 words)", "quantity": 100, "unit": "g" }
               ],
               "instructions": "string",
               "nutritional_info": {
