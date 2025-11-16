@@ -2,6 +2,13 @@ import { Repository } from "typeorm";
 import Database from "../config/database";
 import { Ingredient, FoodCategory } from "../models";
 import { CategoryService } from "./categoryService";
+import { getUnsplashImage } from "../utils/image_searching.util";
+import { Queue } from "bullmq";
+import { Redis } from "ioredis";
+import MessageQueueEnum from "../enums/message.enum";
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 /**
  * Ingredient Service
@@ -12,24 +19,45 @@ export class IngredientService {
   private ingredientRepo: Repository<Ingredient>;
   private foodCategoryRepo: Repository<FoodCategory>;
   private categoryService: CategoryService;
+  private ingredientImageQueue: Queue;
 
   constructor() {
     this.ingredientRepo = Database.getRepository(Ingredient) as Repository<Ingredient>;
     this.foodCategoryRepo = Database.getRepository(FoodCategory) as Repository<FoodCategory>;
     this.categoryService = new CategoryService();
+    
+    // Initialize Redis connection and queue
+    const connection = new Redis({
+      host: process.env.REDIS_HOST || "localhost",
+      port: parseInt(process.env.REDIS_PORT || "6379"),
+      password: process.env.REDIS_PASSWORD || undefined,
+      maxRetriesPerRequest: null,
+    });
+
+    this.ingredientImageQueue = new Queue(MessageQueueEnum.IMAGE_GENERATION, {
+      connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2000 },
+        removeOnComplete: { age: 24 * 3600, count: 100 },
+        removeOnFail: { age: 7 * 24 * 3600 },
+      },
+    });
   }
 
   /**
-   * Find existing ingredient or create new one
+   * Find existing ingredient or create new one with image generation
    * Used during AI recipe generation to handle ingredients
    * 
    * @param ingredientName - Name of the ingredient
+   * @param searching - Search terms for image generation (optional)
    * @param queryRunner - Optional query runner for transaction support
    * @param categoryName - Optional category name (if not provided, uses "Other")
    * @returns Promise<Ingredient>
    */
   async findOrCreateIngredient(
     ingredientName: string,
+    searching?: string,
     queryRunner?: any,
     categoryName?: string
   ): Promise<Ingredient> {
@@ -59,8 +87,37 @@ export class IngredientService {
       ingredient.storage_temperature = "room_temp";
       ingredient.is_active = true;
 
+      // Generate image URL from Unsplash if searching term provided
+      if (searching) {
+        try {
+          const imageUrl = await getUnsplashImage(searching);
+          ingredient.image_url = imageUrl || "";
+        } catch (error) {
+          console.warn(`[INGREDIENT IMAGE] - Failed to fetch image for "${searching}":`, error);
+          ingredient.image_url = "";
+        }
+      } else {
+        ingredient.image_url = "";
+      }
+
       ingredient = await manager.save(Ingredient, ingredient);
       console.log(`[SUCCESS] - Created ingredient: ${ingredient.name} (${ingredient.id}) with category: ${category.name}`);
+
+      // Enqueue image processing job if we got an image URL
+      if (ingredient.image_url) {
+        try {
+          await this.ingredientImageQueue.add("event", {
+            ingredientId: ingredient.id,
+            url: ingredient.image_url
+          }, {
+            jobId: `redis_${ingredient.id}_${Date.now()}`,
+            priority: 1,
+          });
+          console.log(`[INGREDIENT IMAGE] - Enqueued image processing job for ingredient: ${ingredient.name}`);
+        } catch (error) {
+          console.error(`[INGREDIENT IMAGE] - Failed to enqueue image job for ingredient ${ingredient.name}:`, error);
+        }
+      }
     } else {
       // If ingredient exists but category is provided and different, optionally update it
       if (categoryName && ingredient.category?.name !== categoryName) {
@@ -115,6 +172,14 @@ export class IngredientService {
       .andWhere("ingredient.is_active = :isActive", { isActive: true })
       .orderBy("ingredient.name", "ASC")
       .getMany();
+  }
+  async updateIngredient(id: string, partialIngredient: Partial<Ingredient>): Promise<Ingredient> {
+    const ingredient = await this.getIngredientById(id);
+    if (!ingredient) {
+      throw new Error("Ingredient not found");
+    }
+    Object.assign(ingredient, partialIngredient);
+    return this.ingredientRepo.save(ingredient);
   }
 }
 
