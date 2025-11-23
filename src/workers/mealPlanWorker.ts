@@ -11,18 +11,18 @@ export function handleMealPlanWorker(connection: any) {
   const worker = new Worker(
     MessageQueueEnum.MEAL_GENERATION,
     async (job) => {
-      const { userId, startDate, numDays = 6, initialMealPlan } = job.data;
+      const { userId, startDate, days = 6, initialMealPlan } = job.data;
       
       console.log(`[WORKER] - Processing job ${job.id}`);
-      console.log(`[INFO] - Generating ${numDays} remaining days for user: ${userId}`);
+      console.log(`[INFO] - Generating ${days} remaining days for user: ${userId}`);
       console.log(`[INFO] - Start date: ${startDate}`);
       console.log(`[INFO] - Initial meal plan ID: ${initialMealPlan?.id}`);
       
       try {
-        const result = await mealPlanService.generateRemainingWeekDays(userId, numDays);
+        const result = await mealPlanService.generateRemainingWeekDays(userId, days);
         
         console.log(`[SUCCESS] - Meal plan generation completed for user: ${userId}`);
-        console.log(`[INFO] - Generated ${result.details.days_successful}/${numDays} days`);
+        console.log(`[INFO] - Generated ${result.details.days_successful}/${days} days`);
         console.log(`[INFO] - Total items saved: ${result.details.items_saved}`);
         
         return {

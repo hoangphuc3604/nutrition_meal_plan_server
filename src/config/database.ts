@@ -23,6 +23,7 @@ class Database {
     if (!Database.instance) {
       // Use centralized DB config
       const dbOpt = config.db;
+      const isProduction = process.env.NODE_ENV === 'prod' || config.db.host.includes('render.com');
       Database.instance = new DataSource({
         type: "postgres",
         host: dbOpt.host,
@@ -43,6 +44,7 @@ class Database {
         ],
         synchronize: false,
         logging: process.env.NODE_ENV === 'development',
+        ssl: isProduction ? { rejectUnauthorized: false } : false,
       });
     }
     return Database.instance;
