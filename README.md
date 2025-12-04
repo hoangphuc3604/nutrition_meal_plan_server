@@ -65,6 +65,9 @@ PORT=4000
 # Worker - Enable background job processing
 ENABLE_WORKER=true
 
+# Optional Unsplash → queue handoff (default false)
+ENABLE_PROCESS_IMAGE=false
+
 # Redis - Must match nutrition_backend
 REDIS_HOST=localhost
 REDIS_PORT=6379

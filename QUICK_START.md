@@ -45,6 +45,9 @@ API_KEY_GENERATE=your_google_gemini_api_key_here
 # ✅ REQUIRED: Enable worker to process queue jobs
 ENABLE_WORKER=true
 
+# Optional: gate Unsplash image processing queues
+ENABLE_PROCESS_IMAGE=false
+
 # ✅ REQUIRED: Redis connection (must match nutrition_backend)
 REDIS_HOST=localhost
 REDIS_PORT=6379
