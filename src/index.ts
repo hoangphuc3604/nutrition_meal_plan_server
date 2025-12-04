@@ -2,6 +2,7 @@ import app from "./app";
 import Database from "./config/database";
 import * as dotenv from "dotenv";
 import { initWorkers, closeWorkers } from "./workers/index";
+import { initCronJobs } from "./cron";
 
 dotenv.config();
 
@@ -18,6 +19,7 @@ const startServer = async () => {
     if (ENABLE_WORKER) {
       console.log("[INFO] - Starting BullMQ Worker...");
       await initWorkers();
+      await initCronJobs();
       console.log("[SUCCESS] - BullMQ Worker started successfully");
     } else {
       console.log("[INFO] - Worker disabled (ENABLE_WORKER=false)");
