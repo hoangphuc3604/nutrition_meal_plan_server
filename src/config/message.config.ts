@@ -24,6 +24,7 @@ export const createQueue = (name: string) =>
   });
 
 export const mealQueue = createQueue(MessageQueueEnum.MEAL_GENERATION);
+export const fridgeScanQueue = createQueue(MessageQueueEnum.FRIDGE_EXPIRY_SCAN);
 
 mealQueue.on("error", (error) => {
   console.error("[QUEUE ERROR] - Meal Queue error:", error);
@@ -36,12 +37,14 @@ mealQueue.on("waiting", (jobId) => {
 process.on("SIGTERM", async () => {
   console.log("[INFO] - SIGTERM received, closing queue connection...");
   await mealQueue.close();
+  await fridgeScanQueue.close();
   await connection.quit();
 });
 
 process.on("SIGINT", async () => {
   console.log("[INFO] - SIGINT received, closing queue connection...");
   await mealQueue.close();
+  await fridgeScanQueue.close();
   await connection.quit();
 });
 

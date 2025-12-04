@@ -10,6 +10,8 @@ import { Recipe } from "../models/recipe.model";
 import { RecipeIngredient } from "../models/recipe_ingredient.model";
 import { Ingredient } from "../models/ingredient.model";
 import { FoodCategory } from "../models/food_category.model";
+import { DeviceToken } from "../models/device_token.model";
+import { Notification } from "../models/notification.model";
 
 dotenv.config();
 import { config } from "./db.config";
@@ -40,7 +42,9 @@ class Database {
           Recipe,
           RecipeIngredient,
           Ingredient,
-          FoodCategory
+          FoodCategory,
+          DeviceToken,
+          Notification
         ],
         synchronize: false,
         logging: process.env.NODE_ENV === 'development',
