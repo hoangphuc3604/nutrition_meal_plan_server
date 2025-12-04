@@ -3,6 +3,17 @@ import Database from "../config/database";
 import { Notification, NotificationStatus, NotificationType } from "../models/notification.model";
 import { PushNotificationService } from "./pushNotificationService";
 
+const DEFAULT_TZ = process.env.DEFAULT_TZ || process.env.FRIDGE_SCAN_TZ || "UTC";
+
+const formatDateInTimeZone = (date: Date, timeZone: string): string => {
+  return date.toLocaleDateString("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+};
+
 class NotificationCronService {
   private notificationRepository: Repository<Notification>;
   private pushService: PushNotificationService;
@@ -15,13 +26,12 @@ class NotificationCronService {
 
   async processExpiryNotifications(daysBefore: number) {
     const now = new Date();
-    now.setHours(0, 0, 0, 0);
 
     const limit = new Date(now);
-    limit.setDate(now.getDate() + daysBefore);
+    limit.setDate(limit.getDate() + daysBefore);
 
-    const from = now.toISOString().split("T")[0];
-    const to = limit.toISOString().split("T")[0];
+    const from = formatDateInTimeZone(now, DEFAULT_TZ);
+    const to = formatDateInTimeZone(limit, DEFAULT_TZ);
 
     const pending = await this.notificationRepository
       .createQueryBuilder("notification")
@@ -31,7 +41,9 @@ class NotificationCronService {
       .andWhere("notification.scheduled_date BETWEEN :from AND :to", { from, to })
       .getMany();
 
-    console.log(`[CRON] Found ${pending.length} pending expiry notifications (${from} -> ${to})`);
+    console.log(
+      `[CRON] Found ${pending.length} pending expiry notifications (${from} -> ${to}) [tz=${DEFAULT_TZ}]`
+    );
 
     for (const notification of pending) {
       try {
