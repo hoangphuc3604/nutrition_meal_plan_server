@@ -27,7 +27,7 @@ class NotificationCronService {
       .createQueryBuilder("notification")
       .leftJoinAndSelect("notification.user", "user")
       .where("notification.type = :type", { type: NotificationType.EXPIRY_REMINDER })
-      .andWhere("notification.status = :status", { status: NotificationStatus.PENDING })
+      // .andWhere("notification.status = :status", { status: NotificationStatus.PENDING })
       .andWhere("notification.scheduled_date BETWEEN :from AND :to", { from, to })
       .getMany();
 
