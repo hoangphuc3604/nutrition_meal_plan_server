@@ -10,7 +10,7 @@ export const initCronJobs = async () => {
     { daysBefore: DEFAULT_DAYS },
     {
       repeat: {
-        cron: DEFAULT_CRON,
+        pattern: DEFAULT_CRON,
         tz: DEFAULT_TZ,
       },
       jobId: "fridge_expiry_scan_daily",
