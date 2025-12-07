@@ -1,38 +1,38 @@
 import dotenv from "dotenv";
 import { Worker } from "bullmq";
 import { IngredientService } from "../services/ingredientService";
+import { ImageUploadService } from "../services/imageUploadService";
 import MessageQueueEnum from "../enums/message.enum";
-import fs from "fs";
-import path from "path";
 dotenv.config();
 
 export function handleUpdateImageWorker(connection: any) {
   const ingredientService = new IngredientService();
+  const imageUploadService = new ImageUploadService();
 
   const worker = new Worker(
     MessageQueueEnum.IMAGE_GENERATION,
     async (job) => {
         const { ingredientId, url } = job.data;
-        console.log("[DEBUG] __dirname =", __dirname);
-// c       console.log("[DEBUG] filePath =", filePath);
-        console.log(`[GEN_IMAGE] - Generating image for ingredient ${ingredientId}`);
-        const fileName = path.basename(`ingredient_${ingredientId}.jpg`);
-        const filePath = path.join(__dirname, "../images", fileName);
-        console.log("[DEBUG] filePath =", filePath);
-    // Gọi fetch để tải ảnh
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Không thể tải ảnh: ${response.statusText}`);
+        console.log(`[GEN_IMAGE] - Processing image for ingredient ${ingredientId}`);
+        
+        try {
+            // Upload image to Cloudinary
+            const cloudinaryUrl = await imageUploadService.uploadIngredientImage(
+                url,
+                ingredientId
+            );
+
+            // Update ingredient with Cloudinary URL
+            const result = await ingredientService.updateIngredient(ingredientId, { 
+                image_url: cloudinaryUrl 
+            });
+
+            console.log(`[GEN_IMAGE] - Successfully updated ingredient ${ingredientId} with Cloudinary URL`);
+            return result;
+        } catch (error) {
+            console.error(`[GEN_IMAGE] - Failed to process image for ingredient ${ingredientId}:`, error);
+            throw error;
         }
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        // Ghi file xuống thư mục images/
-        await fs.promises.writeFile(filePath, buffer);
-
-        const result = await ingredientService.updateIngredient(ingredientId, { image_url: `${process.env.HOST}/nutrition-images/${fileName}` });
-
-        return result;
     },
     {
       connection,

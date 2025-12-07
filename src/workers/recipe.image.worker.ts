@@ -1,39 +1,38 @@
 import dotenv from "dotenv";
 import { Worker } from "bullmq";
 import { RecipeService } from "../services/recipeService";
+import { ImageUploadService } from "../services/imageUploadService";
 import MessageQueueEnum from "../enums/message.enum";
-import fs from "fs";
-import path from "path";
 dotenv.config();
 
 export function handleUpdateRecipeImageWorker(connection: any) {
   const recipeService = new RecipeService();
+  const imageUploadService = new ImageUploadService();
 
   const worker = new Worker(
     MessageQueueEnum.RECIPE_IMAGE_GENERATION,
     async (job) => {
         const { recipeId, url } = job.data;
-        console.log("[DEBUG] __dirname =", __dirname);
-        console.log(`[GEN_RECIPE_IMAGE] - Generating image for recipe ${recipeId}`);
+        console.log(`[GEN_RECIPE_IMAGE] - Processing image for recipe ${recipeId}`);
         
-        const fileName = path.basename(`recipe_${recipeId}.jpg`);
-        const filePath = path.join(__dirname, "../images", fileName);
-        console.log("[DEBUG] filePath =", filePath);
-        
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Không thể tải ảnh: ${response.statusText}`);
+        try {
+            // Upload image to Cloudinary
+            const cloudinaryUrl = await imageUploadService.uploadRecipeImage(
+                url,
+                recipeId
+            );
+
+            // Update recipe with Cloudinary URL
+            const result = await recipeService.updateRecipe(recipeId, { 
+                image_url: cloudinaryUrl 
+            });
+
+            console.log(`[GEN_RECIPE_IMAGE] - Successfully updated recipe ${recipeId} with Cloudinary URL`);
+            return result;
+        } catch (error) {
+            console.error(`[GEN_RECIPE_IMAGE] - Failed to process image for recipe ${recipeId}:`, error);
+            throw error;
         }
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        await fs.promises.writeFile(filePath, buffer);
-
-        const result = await recipeService.updateRecipe(recipeId, { 
-            image_url: `${process.env.HOST}/nutrition-images/${fileName}` 
-        });
-
-        return result;
     },
     {
       connection,
