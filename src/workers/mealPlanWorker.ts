@@ -19,7 +19,7 @@ export function handleMealPlanWorker(connection: any) {
       console.log(`[INFO] - Initial meal plan ID: ${initialMealPlan?.id}`);
       
       try {
-        const result = await mealPlanService.generateRemainingWeekDays(userId, days);
+        const result = await mealPlanService.generateRemainingWeekDays(userId, days, startDate);
         
         console.log(`[SUCCESS] - Meal plan generation completed for user: ${userId}`);
         console.log(`[INFO] - Generated ${result.details.days_successful}/${days} days`);
