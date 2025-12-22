@@ -47,7 +47,16 @@ export function buildSingleDayMealPlanPrompt(
         daily_calorie_target,
         allergies,
         dietary_preferences,
+        breakfast_dishes_count,
+        lunch_dishes_count,
+        dinner_dishes_count,
     } = profile as any;
+
+    const breakfastCount = Number(breakfast_dishes_count ?? 1);
+    const lunchCount = Number(lunch_dishes_count ?? 1);
+    const dinnerCount = Number(dinner_dishes_count ?? 1);
+
+    console.log("[Count] ", breakfastCount, lunchCount, dinnerCount);
 
     // Build list of recipes to avoid
     const recipesToAvoid: string[] = [];
@@ -168,15 +177,16 @@ Requirements:
    - Meal prep strategies
    
 5. Meal-Specific Requirements:
-   - **BREAKFAST**: Quick, easy, portable (max 15 min total time, "easy" difficulty only)
+   - **BREAKFAST**: Generate exactly ${breakfastCount} recipe(s); quick, easy, portable (max 15 min total time, "easy" difficulty only)
      - Examples: overnight oats, smoothies, bánh mì, instant noodles with protein/vegetables
      - Make-ahead options preferred
-   - **LUNCH/DINNER**: Can be more complex ("easy", "medium", "hard" difficulty allowed)
+   - **LUNCH**: Generate exactly ${lunchCount} recipe(s); can be easy/medium/hard
+   - **DINNER**: Generate exactly ${dinnerCount} recipe(s); can be easy/medium/hard
    
 6. Response must translate to Vietnamese
 7. Format the response strictly as per the "RESPONSE FORMAT" below
 8. Ensure the entire response is valid JSON
-9. Each meal should have 3 recipe options (total 9 recipes for the day)
+9. Each meal should have exactly the number of recipes specified above
 10. Balance calories: ~25% breakfast, ~35% lunch, ~40% dinner
 
 **DIVERSITY STRATEGY** (MANDATORY):
@@ -195,6 +205,7 @@ RESPONSE FORMAT (ONLY this JSON):
           "meal_date": "${date}",
           "meal_type": "breakfast",
           "recipes": [
+            // exactly ${breakfastCount} breakfast recipes with the structure below
             {
               "name": "string (Vietnamese + English)",
               "description": "string",
@@ -214,32 +225,6 @@ RESPONSE FORMAT (ONLY this JSON):
                 "carbs": 50,
                 "fats": 10
               }
-            },
-            {
-              "name": "string (recipe 2 - MUST BE DIFFERENT)",
-              "description": "string",
-              "searching": "string (2-3 words for image search)",
-              "cuisine_type": "string (different from recipe 1)",
-              "difficulty_level": "easy",
-              "prep_time_minutes": 5,
-              "cook_time_minutes": 10,
-              "servings": 2,
-              "ingredients": [{ "name": "string", "searching": "string (2-3 words)", "quantity": 100, "unit": "g", "category_name": "string" }],
-              "instructions": "string",
-              "nutritional_info": { "calories": 400, "protein": 20, "carbs": 50, "fats": 10 }
-            },
-            {
-              "name": "string (recipe 3 - MUST BE DIFFERENT)",
-              "description": "string",
-              "searching": "string (2-3 words for image search)",
-              "cuisine_type": "string (different from recipe 1 & 2)",
-              "difficulty_level": "easy",
-              "prep_time_minutes": 5,
-              "cook_time_minutes": 10,
-              "servings": 2,
-              "ingredients": [{ "name": "string", "searching": "string (2-3 words)", "quantity": 100, "unit": "g", "category_name": "string" }],
-              "instructions": "string",
-              "nutritional_info": { "calories": 400, "protein": 20, "carbs": 50, "fats": 10 }
             }
           ]
         },
@@ -247,14 +232,14 @@ RESPONSE FORMAT (ONLY this JSON):
           "meal_date": "${date}",
           "meal_type": "lunch",
           "recipes": [
-            // 3 lunch recipes (MUST BE DIFFERENT from breakfast and each other)
+            // exactly ${lunchCount} lunch recipes (MUST BE DIFFERENT from breakfast and each other)
           ]
         },
         {
           "meal_date": "${date}",
           "meal_type": "dinner",
           "recipes": [
-            // 3 dinner recipes (MUST BE DIFFERENT from breakfast, lunch, and each other)
+            // exactly ${dinnerCount} dinner recipes (MUST BE DIFFERENT from breakfast, lunch, and each other)
           ]
         }
       ]
@@ -264,7 +249,7 @@ RESPONSE FORMAT (ONLY this JSON):
 
 **FINAL VERIFICATION** (Before returning):
 1. Check that NO recipe name appears in the "RECIPES TO ABSOLUTELY AVOID" list
-2. Check that all 9 recipes have different names
+2. Check that all recipes have different names
 3. Check that cuisine types are varied across the day
 4. Check that main protein sources (chicken, beef, pork, fish, tofu) are varied
 `;
@@ -478,9 +463,11 @@ export function getWeekDates(startDate: Date): string[] {
  * Get start of week (Monday)
  */
 export function getStartOfWeek(date: Date): Date {
-    const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(date.setDate(diff));
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d);
+    monday.setDate(diff);
     monday.setHours(0, 0, 0, 0);
     return monday;
 }
