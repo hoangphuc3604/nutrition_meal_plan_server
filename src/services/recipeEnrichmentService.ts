@@ -138,7 +138,7 @@ export class RecipeEnrichmentService {
      */
     private async saveIngredients(
         recipeId: string,
-        ingredients: Array<{ name: string; quantity?: string; unit?: string }>
+        ingredients: Array<{ name: string; quantity?: string; unit?: string, category_name?: string }>,
     ): Promise<void> {
         if (!ingredients || ingredients.length === 0) {
             console.log(`⚠️ [RecipeEnrichment] No ingredients to save for recipe ${recipeId}`);
@@ -154,7 +154,7 @@ export class RecipeEnrichmentService {
                     ing.name,
                     ing.name, // Use ingredient name as search term for image
                     undefined,
-                    undefined // Will use "Other" category by default
+                    ing.category_name // Use provided category name
                 );
 
                 // Parse quantity (convert string to number if possible)

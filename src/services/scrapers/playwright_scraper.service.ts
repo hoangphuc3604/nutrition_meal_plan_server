@@ -1,8 +1,8 @@
 import { IRecipeScraper } from "./IRecipeScraper.interface";
 import { ScrapedRecipeData } from "../../types/scraped_recipe.type";
 import { chromium, Browser, Page } from "playwright";
-import { LLMService } from "../llmService";
-
+import { GoogleGeminiModel as LLMService } from "../llmService";
+import { RecipeSchema } from "../../utils/recipe.schema";
 /**
  * Playwright-based Recipe Scraper
  * Uses headless browser to fetch full HTML content, then LLM to parse recipe
@@ -166,7 +166,7 @@ IMPORTANT: If the page contains multiple recipes, extract ONLY THE FIRST ONE.
 
 TASK: Extract a SINGLE recipe object (not an array) with these exact fields:
 - name (string): exact recipe title
-- ingredients (array): [{name: string, quantity: string, unit: string}]
+- ingredients (array): [{name: string, quantity: string, unit: string, category_name: string (e.g., "Vegetables", "Meat", "Dairy", "Grains", "Spices")}]
 - instructions (string): step-by-step instructions as a single string
 - prep_time_minutes (number or null): preparation time in minutes
 - cook_time_minutes (number or null): cooking time in minutes  
@@ -179,20 +179,14 @@ TASK: Extract a SINGLE recipe object (not an array) with these exact fields:
 
 Return ONLY a single recipe object as valid JSON. Do NOT wrap in array. Do NOT return multiple recipes.`;
 
-        const response = await this.llm.generateResponse(prompt);
+        const response = await this.llm.generateResponse(prompt, RecipeSchema);
         
         if (!response.success) {
             throw new Error(`LLM parsing failed: ${response.error}`);
         }
         
         // Handle both direct recipe object and wrapped response
-        let recipeData = response;
-        
-        // If LLM returned array of recipes, take only the first one
-        if (recipeData.recipes && Array.isArray(recipeData.recipes)) {
-            console.log(`⚠️ [Playwright] LLM returned ${recipeData.recipes.length} recipes, using first one`);
-            recipeData = recipeData.recipes[0];
-        }
+        let recipeData = response.data;
 
         // Normalize instructions to string format
         let instructions = recipeData.instructions || '';

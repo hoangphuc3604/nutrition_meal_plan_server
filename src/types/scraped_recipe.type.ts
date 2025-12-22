@@ -17,6 +17,7 @@ export interface ScrapedRecipeData {
         name: string;
         quantity?: string;
         unit?: string;
+        category_name?: string;
     }>;
     nutrition?: {
         calories?: number;

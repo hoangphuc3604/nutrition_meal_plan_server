@@ -3,12 +3,11 @@ import { LLM_CONFIG } from "../config/llm.config";
 import { MealPlanSchema, MealPlanResponse } from "../utils/meal_plan.schema";
 
 /**
- * Universal LLM Service
- * Supports multiple LLM providers: Gemini, Azure OpenAI, OpenAI
+ * Google Gemini Model Service
  */
-export class LLMService {
-    private provider: LLMProviderType;
-    private config: any;
+export class GoogleGeminiModel {
+  private url: string;
+  private apiKey: string;
 
     constructor() {
         this.url =
@@ -23,7 +22,8 @@ export class LLMService {
     }
 
     async generateResponse(
-        userMessage: string
+        userMessage: string,
+        outputSchema: any = MealPlanSchema
     ): Promise<{ success: boolean; data?: MealPlanResponse; error?: string; tokenUsage?: any }> {
         const generationConfig = {
             temperature: LLM_CONFIG.temperature,
@@ -77,7 +77,7 @@ export class LLMService {
                 // Clean JSON response - remove markdown code blocks
                 const cleaned = aiResponse.replace(/```json\n?|\n?```/g, "").trim();
                 const parsed = JSON.parse(cleaned);
-                const validated = MealPlanSchema.parse(parsed);
+                const validated = outputSchema.parse(parsed);
 
                 const tokenUsage = data.usage || data.tokenUsage;
 
@@ -107,8 +107,4 @@ export class LLMService {
     }
 }
 
-// Export singleton instance
-export default new LLMService();
-
-// Export class for manual instantiation if needed
-export { LLMService as GoogleGeminiModel };
+export default new GoogleGeminiModel();

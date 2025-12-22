@@ -7,10 +7,6 @@ import { playwrightScraperService } from "./playwright_scraper.service";
  * Recipe Scraper Manager
  * Orchestrates multiple scraping strategies with fallback chain
  * 
- * Priority order:
- * 1. Cheerio (Fast, works for structured sites with JSON-LD)
- * 2. Playwright (Reliable, works on any site)
- * 
  * Usage:
  * const data = await recipeScraperManager.scrapeRecipe(url);
  */
@@ -18,10 +14,9 @@ export class RecipeScraperManager {
     private scrapers: IRecipeScraper[];
 
     constructor(scrapers?: IRecipeScraper[]) {
-        // Default scraper chain: Cheerio → Playwright
         this.scrapers = scrapers || [
-            cheerioScraperService,     // Try fast static parsing first
-            playwrightScraperService,  // Fallback to browser rendering
+            playwrightScraperService,
+            cheerioScraperService,
         ];
     }
 
@@ -56,7 +51,6 @@ export class RecipeScraperManager {
             }
         }
 
-        // All scrapers failed
         const errorSummary = errors
             .map(e => `${e.scraper}: ${e.error}`)
             .join('; ');
@@ -78,13 +72,9 @@ export class RecipeScraperManager {
         console.log(`➕ Added scraper: ${scraper.name} (${priority ? 'high' : 'low'} priority)`);
     }
 
-    /**
-     * Get list of available scrapers
-     */
     getAvailableScrapers(): string[] {
         return this.scrapers.map(s => s.name);
     }
 }
 
-// Export singleton instance
 export const recipeScraperManager = new RecipeScraperManager();
