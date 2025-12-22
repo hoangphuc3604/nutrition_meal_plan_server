@@ -14,6 +14,9 @@ export class Recipe {
   @Column({ type: "varchar" })
   name: string;
 
+  @Column({ type: "varchar", nullable: true })
+  url: string;
+
   @Column({ type: "text", nullable: true })
   description: string;
 
