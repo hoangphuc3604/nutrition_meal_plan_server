@@ -7,6 +7,7 @@ import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import MessageQueueEnum from "../enums/message.enum";
 import * as dotenv from "dotenv";
+import { getSharedRedisConnection } from "../config/redis.connection";
 
 dotenv.config();
 
@@ -26,13 +27,8 @@ export class IngredientService {
     this.foodCategoryRepo = Database.getRepository(FoodCategory) as Repository<FoodCategory>;
     this.categoryService = new CategoryService();
     
-    // Initialize Redis connection and queue
-    const connection = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      port: parseInt(process.env.REDIS_PORT || "6379"),
-      password: process.env.REDIS_PASSWORD || undefined,
-      maxRetriesPerRequest: null,
-    });
+    // Use shared Redis connection
+    const connection = getSharedRedisConnection();
 
     this.ingredientImageQueue = new Queue(MessageQueueEnum.IMAGE_GENERATION, {
       connection,
