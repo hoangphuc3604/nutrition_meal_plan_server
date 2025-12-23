@@ -23,9 +23,7 @@ import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import MessageQueueEnum from "../enums/message.enum";
 import * as dotenv from "dotenv";
-import { LLM_CONFIG } from "../config/llm.config";
 import { GENERATION_CONFIG } from "../config/generation.config";
-import { MealPlanResponse } from "../utils/meal_plan.schema";
 import { getSharedRedisConnection } from "../config/redis.connection";
 
 dotenv.config();
