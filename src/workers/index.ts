@@ -6,6 +6,7 @@ import { handleUpdateRecipeImageWorker } from "./recipe.image.worker";
 import { handleMealPlanWorker } from "./mealPlanWorker";
 import { handlePushNotificationWorker } from "./pushNotificationWorker";
 import { handleFridgeExpiryWorker } from "./fridgeExpiry.worker";
+import { handleRecipeEnrichmentWorker } from "./recipeEnrichment.worker";
 
 dotenv.config();
 
@@ -27,7 +28,8 @@ export const initWorkers = async () => {
       handleUpdateRecipeImageWorker(connection),
       handleMealPlanWorker(connection),
       handlePushNotificationWorker(connection),
-      handleFridgeExpiryWorker(connection)
+      handleFridgeExpiryWorker(connection),
+      handleRecipeEnrichmentWorker(connection)
     ];
   }
 

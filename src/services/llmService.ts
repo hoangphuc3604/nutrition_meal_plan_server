@@ -6,8 +6,8 @@ import { MealPlanSchema, MealPlanResponse } from "../utils/meal_plan.schema";
  * Google Gemini Model Service
  */
 export class GoogleGeminiModel {
-    private url: string;
-    private apiKey: string;
+  private url: string;
+  private apiKey: string;
 
     constructor() {
         this.url =
@@ -22,7 +22,8 @@ export class GoogleGeminiModel {
     }
 
     async generateResponse(
-        userMessage: string
+        userMessage: string,
+        outputSchema: any = MealPlanSchema
     ): Promise<{ success: boolean; data?: MealPlanResponse; error?: string; tokenUsage?: any }> {
         const generationConfig = {
             temperature: LLM_CONFIG.temperature,
@@ -76,7 +77,7 @@ export class GoogleGeminiModel {
                 // Clean JSON response - remove markdown code blocks
                 const cleaned = aiResponse.replace(/```json\n?|\n?```/g, "").trim();
                 const parsed = JSON.parse(cleaned);
-                const validated = MealPlanSchema.parse(parsed);
+                const validated = outputSchema.parse(parsed);
 
                 const tokenUsage = data.usage || data.tokenUsage;
 
