@@ -56,6 +56,12 @@ export function handleMealPlanWorker(connection: any) {
     console.error(`[GEN_MEAL_PLAN] Job ${job?.id} failed: ${err.message}`);
   });
 
+  const originalClose = worker.close.bind(worker);
+  worker.close = async () => {
+      await mealPlanService.close();
+      return originalClose();
+  };
+
   console.log("[INIT] Worker started for queue: gen_meal_plan");
   return worker;
 }

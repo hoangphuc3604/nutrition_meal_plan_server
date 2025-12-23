@@ -23,9 +23,8 @@ import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import MessageQueueEnum from "../enums/message.enum";
 import * as dotenv from "dotenv";
-import { LLM_CONFIG } from "../config/llm.config";
 import { GENERATION_CONFIG } from "../config/generation.config";
-import { MealPlanResponse } from "../utils/meal_plan.schema";
+import { getSharedRedisConnection } from "../config/redis.connection";
 
 dotenv.config();
 
@@ -76,13 +75,8 @@ export class MealPlanService {
         this.ingredientService = new IngredientService();
         this.categoryService = new CategoryService();
         
-        // Initialize Redis connection and queues
-        const connection = new Redis({
-            host: process.env.REDIS_HOST || "localhost",
-            port: parseInt(process.env.REDIS_PORT || "6379"),
-            password: process.env.REDIS_PASSWORD || undefined,
-            maxRetriesPerRequest: null,
-        });
+        // Use shared Redis connection
+        const connection = getSharedRedisConnection();
 
         this.recipeImageQueue = new Queue(MessageQueueEnum.RECIPE_IMAGE_GENERATION, {
             connection,
@@ -103,6 +97,11 @@ export class MealPlanService {
                 removeOnFail: { age: 7 * 24 * 3600 },
             },
         });
+    }
+
+    public async close() {
+        await this.recipeImageQueue.close();
+        await this.ingredientImageQueue.close();
     }
 
     /**

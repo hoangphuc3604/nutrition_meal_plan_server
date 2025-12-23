@@ -3,6 +3,7 @@ import Database from "./config/database";
 import * as dotenv from "dotenv";
 import { initWorkers, closeWorkers } from "./workers/index";
 import { initCronJobs } from "./cron";
+import { closeSharedRedisConnection } from "./config/redis.connection";
 
 dotenv.config();
 
@@ -48,11 +49,14 @@ const startServer = async () => {
 process.on("SIGTERM", async () => {
   console.log("[INFO] - SIGTERM received, shutting down gracefully");
   await closeWorkers();
+  await closeSharedRedisConnection();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
   console.log("[INFO] - SIGINT received, shutting down gracefully");
+  await closeWorkers();
+  await closeSharedRedisConnection();
   process.exit(0);
 });
 
