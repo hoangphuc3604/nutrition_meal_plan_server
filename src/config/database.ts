@@ -26,13 +26,9 @@ class Database {
       // Use centralized DB config
       const dbOpt = config.db;
       const isProduction = process.env.NODE_ENV === 'prod' || config.db.host.includes('render.com');
-      Database.instance = new DataSource({
+
+      const connectOptions: any = {
         type: "postgres",
-        host: dbOpt.host,
-        port: dbOpt.port,
-        username: dbOpt.user,
-        password: dbOpt.password,
-        database: dbOpt.database,
         entities: [
           User,
           KeyToken,
@@ -49,7 +45,19 @@ class Database {
         synchronize: false,
         logging: process.env.NODE_ENV === 'development',
         ssl: isProduction ? { rejectUnauthorized: false } : false,
-      });
+      };
+
+      if (dbOpt.url) {
+        connectOptions.url = dbOpt.url;
+      } else {
+        connectOptions.host = dbOpt.host;
+        connectOptions.port = dbOpt.port;
+        connectOptions.username = dbOpt.user;
+        connectOptions.password = dbOpt.password;
+        connectOptions.database = dbOpt.database;
+      }
+
+      Database.instance = new DataSource(connectOptions);
     }
     return Database.instance;
   }

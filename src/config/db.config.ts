@@ -5,6 +5,7 @@ const dev = {
         port: process.env.PORT ? parseInt(process.env.PORT) : 3001,
     },
     db: {
+        url: process.env.DEV_DB_URL,
         host: process.env.DEV_DB_HOST || "localhost",
         user: process.env.DEV_DB_USER || "postgres",
         port: process.env.DEV_DB_PORT ? parseInt(process.env.DEV_DB_PORT) : 5432,
@@ -21,6 +22,7 @@ const prod = {
         port: process.env.PORT ? parseInt(process.env.PORT) : 3001,
     },
     db: {
+        url: process.env.PROD_DB_URL,
         host: process.env.PROD_DB_HOST || "localhost",
         user: process.env.PROD_DB_USER || "postgres",
         port: process.env.PROD_DB_PORT ? parseInt(process.env.PROD_DB_PORT) : 5432,
