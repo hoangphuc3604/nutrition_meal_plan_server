@@ -24,7 +24,7 @@ export class GoogleGeminiModel {
     async generateResponse(
         userMessage: string,
         outputSchema: any = MealPlanSchema
-    ): Promise<{ success: boolean; data?: MealPlanResponse; error?: string; tokenUsage?: any }> {
+    ): Promise<{ success: boolean; data?: any; error?: string; tokenUsage?: any }> {
         const generationConfig = {
             temperature: LLM_CONFIG.temperature,
             maxOutputTokens: LLM_CONFIG.maxTokens,
