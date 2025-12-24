@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { DataSource } from "typeorm";
 import * as dotenv from "dotenv";
+import * as dns from "dns";
 import { User } from "../models/user.model";
 import { KeyToken } from "../models/key.model";
 import { UserProfile } from "../models/user_profile.model";
@@ -16,6 +17,10 @@ import { Notification } from "../models/notification.model";
 dotenv.config();
 import { config } from "./db.config";
 
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 class Database {
   private static instance: DataSource;
 
@@ -23,7 +28,6 @@ class Database {
 
   public static getInstance(): DataSource {
     if (!Database.instance) {
-      // Use centralized DB config
       const dbOpt = config.db;
       const isProduction = process.env.NODE_ENV === 'prod' || config.db.host.includes('render.com');
 
@@ -45,10 +49,31 @@ class Database {
         synchronize: false,
         logging: process.env.NODE_ENV === 'development',
         ssl: isProduction ? { rejectUnauthorized: false } : false,
+        extra: {
+          connectionTimeoutMillis: 10000,
+        },
       };
 
       if (dbOpt.url) {
-        connectOptions.url = dbOpt.url;
+        let dbUrl = dbOpt.url;
+        const ipv6Match = dbUrl.match(/postgres:\/\/([^:]+):([^@]+)@\[([\da-f:]+)\]:(\d+)\/(.+)/i);
+        if (ipv6Match) {
+          const username = ipv6Match[1];
+          const password = ipv6Match[2];
+          const port = ipv6Match[4];
+          const dbPath = ipv6Match[5];
+          
+          console.log("[WARNING] - IPv6 address detected in database URL, replacing with hostname");
+          
+          const hostname = dbOpt.host;
+          if (hostname && hostname !== 'localhost') {
+            dbUrl = `postgres://${username}:${password}@${hostname}:${port}/${dbPath}`;
+            console.log(`[INFO] - Replaced IPv6 address with hostname: ${hostname}`);
+          } else {
+            console.warn("[WARNING] - No hostname found in PROD_DB_HOST, connection may fail");
+          }
+        }
+        connectOptions.url = dbUrl;
       } else {
         connectOptions.host = dbOpt.host;
         connectOptions.port = dbOpt.port;
@@ -56,6 +81,11 @@ class Database {
         connectOptions.password = dbOpt.password;
         connectOptions.database = dbOpt.database;
       }
+
+      if (!connectOptions.extra) {
+        connectOptions.extra = {};
+      }
+      connectOptions.extra.connectionTimeoutMillis = 10000;
 
       Database.instance = new DataSource(connectOptions);
     }
