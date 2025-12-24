@@ -29,7 +29,13 @@ class Database {
   public static getInstance(): DataSource {
     if (!Database.instance) {
       const dbOpt = config.db;
-      const isProduction = process.env.NODE_ENV === 'prod' || config.db.host.includes('render.com');
+      const isProduction = process.env.NODE_ENV === 'production' || 
+                          process.env.NODE_ENV === 'prod' || 
+                          process.env.RENDER === 'true' ||
+                          config.db.host.includes('render.com') ||
+                          config.db.host !== 'localhost';
+      
+      console.log(`[DEBUG] - Database config: host=${dbOpt.host}, url=${dbOpt.url ? 'SET' : 'NOT SET'}, isProduction=${isProduction}`);
 
       const connectOptions: any = {
         type: "postgres",

@@ -34,6 +34,21 @@ const prod = {
     }
 };
 
-// Export configuration based on NODE_ENV
+const isProduction = 
+  process.env.NODE_ENV === "production" || 
+  process.env.NODE_ENV === "prod" ||
+  process.env.RENDER === "true" ||
+  !!process.env.PROD_DB_URL ||
+  !!process.env.PROD_DB_HOST;
+
 type EnvConfig = typeof dev;
-export const config: EnvConfig = process.env.NODE_ENV === "production" ? prod : dev;
+export const config: EnvConfig = isProduction ? prod : dev;
+
+if (isProduction) {
+  console.log("[INFO] - Using PRODUCTION database configuration");
+  if (!prod.db.url && !prod.db.host) {
+    console.error("[ERROR] - PROD_DB_URL or PROD_DB_HOST must be set in production!");
+  }
+} else {
+  console.log("[INFO] - Using DEVELOPMENT database configuration");
+}
