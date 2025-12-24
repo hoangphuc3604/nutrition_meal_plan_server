@@ -92,6 +92,11 @@ class Database {
         connectOptions.extra = {};
       }
       connectOptions.extra.connectionTimeoutMillis = 10000;
+      
+      if (isProduction) {
+        connectOptions.extra.family = 4;
+        console.log("[INFO] - Forcing IPv4 connection (family=4) for production environment");
+      }
 
       Database.instance = new DataSource(connectOptions);
     }
