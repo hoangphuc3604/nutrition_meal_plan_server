@@ -5,18 +5,19 @@ import { ScrapedRecipeData } from "../types/scraped_recipe.type";
 import { DishIdea } from "../types/dish_idea.type";
 import { Repository } from "typeorm";
 import { IngredientService } from "./ingredientService";
-import { CategoryService } from "./categoryService";
+import Redis from "ioredis";
+import { DistributedLock } from "../utils/distributedLock";
 
 /**
  * Service for enriching meal plans with scraped recipe data
- * Handles scraping, database operations, and meal plan updates
+ * Uses distributed locking to prevent duplicate scraping across servers
  */
 export class RecipeEnrichmentService {
     private recipeRepository: Repository<Recipe>;
     private recipeIngredientRepository: Repository<RecipeIngredient>;
     private mealPlanItemRepository: Repository<MealPlanItem>;
     private ingredientService: IngredientService;
-    private categoryService: CategoryService;
+    private distributedLock: DistributedLock;
 
     constructor() {
         const db = Database.getInstance();
@@ -24,11 +25,19 @@ export class RecipeEnrichmentService {
         this.recipeIngredientRepository = db.getRepository(RecipeIngredient);
         this.mealPlanItemRepository = db.getRepository(MealPlanItem);
         this.ingredientService = new IngredientService();
-        this.categoryService = new CategoryService();
+        
+        // Initialize Redis for distributed locking
+        const redis = new Redis({
+            host: process.env.REDIS_HOST || 'localhost',
+            port: parseInt(process.env.REDIS_PORT || '6379'),
+            password: process.env.REDIS_PASSWORD || undefined,
+        });
+        this.distributedLock = new DistributedLock(redis);
     }
 
     /**
      * Enrich a single dish with scraped recipe data
+     * Uses distributed locking to coordinate with nutrition_backend
      */
     async enrichSingleDish(
         dish: DishIdea,
@@ -36,30 +45,86 @@ export class RecipeEnrichmentService {
         mealPlanId: string
     ): Promise<{ success: boolean; recipeId?: string; error?: string }> {
         try {
-            console.log(`[RecipeEnrichment] Processing dish: ${dish.dish_name}`);
-
             if (!dish.source_url) {
-                console.log(`⚠️ [RecipeEnrichment] No URL for ${dish.dish_name}`);
                 return { success: false, error: 'No source URL provided' };
             }
 
-            // Scrape recipe data
-            const scrapedData = await recipeScraperManager.scrapeRecipe(dish.source_url);
+            // Find the recipe that needs enrichment
+            const recipe = await this.recipeRepository.findOne({ 
+                where: { url: dish.source_url }
+            });
 
-            // Save recipe to database
-            const recipe = await this.saveRecipe(scrapedData, userId, dish);
+            if (!recipe) {
+                return { success: false, error: 'Recipe not found in database' };
+            }
 
-            // Save ingredients
-            await this.saveIngredients(recipe.id, scrapedData.ingredients);
+            // Check if recipe is already enriched (has ingredients)
+            const ingredientsCount = await this.recipeIngredientRepository.count({
+                where: { recipe_id: recipe.id }
+            });
 
-            // Update meal plan item
-            await this.updateMealPlanItem(mealPlanId, dish, recipe.id);
+            if (ingredientsCount > 0) {
+                console.log(`♻️ Recipe already enriched: ${recipe.id}`);
+                return { success: true, recipeId: recipe.id };
+            }
 
-            console.log(`✅ [RecipeEnrichment] Successfully enriched: ${dish.dish_name}`);
-            return { success: true, recipeId: recipe.id };
+            // Create lock key from URL (same format as nutrition_backend)
+            const urlHash = Buffer.from(dish.source_url).toString('base64').substring(0, 50);
+            const lockKey = `recipe:url:${urlHash}`;
+
+            // Check if another process is already scraping this URL
+            const isLocked = await this.distributedLock.isLocked(lockKey);
+            if (isLocked) {
+                console.log(`⏳ Recipe being scraped, waiting...`);
+                await this.waitForEnrichment(recipe.id, 30);
+                
+                // Check if recipe is enriched now
+                const enrichedCount = await this.recipeIngredientRepository.count({
+                    where: { recipe_id: recipe.id }
+                });
+                
+                if (enrichedCount > 0) {
+                    return { success: true, recipeId: recipe.id };
+                }
+                return { success: false, error: 'Timeout waiting for enrichment' };
+            }
+
+            // Acquire lock
+            const lockAcquired = await this.distributedLock.acquire(lockKey, 300);
+            if (!lockAcquired) {
+                return { success: false, error: 'Could not acquire lock' };
+            }
+
+            try {
+                // Double-check recipe hasn't been enriched (race condition prevention)
+                const ingredientsCount = await this.recipeIngredientRepository.count({
+                    where: { recipe_id: recipe.id }
+                });
+                
+                if (ingredientsCount > 0) {
+                    console.log(`♻️ Recipe was enriched while acquiring lock: ${recipe.id}`);
+                    return { success: true, recipeId: recipe.id };
+                }
+
+                // Scrape recipe data
+                console.log(`🔍 Scraping: ${dish.source_url}`);
+                const scrapedData = await recipeScraperManager.scrapeRecipe(dish.source_url);
+
+                // Update recipe with scraped data
+                await this.updateRecipe(recipe, scrapedData);
+                
+                // Save ingredients
+                await this.saveIngredients(recipe.id, scrapedData.ingredients);
+
+                console.log(`✅ Enriched: ${dish.dish_name}`);
+                return { success: true, recipeId: recipe.id };
+
+            } finally {
+                await this.distributedLock.release(lockKey);
+            }
 
         } catch (error: any) {
-            console.error(`❌ [RecipeEnrichment] Failed to enrich ${dish.dish_name}:`, error.message);
+            console.error(`❌ Failed to enrich ${dish.dish_name}:`, error.message);
             return { success: false, error: error.message };
         }
     }
@@ -107,30 +172,23 @@ export class RecipeEnrichmentService {
     }
 
     /**
-     * Save scraped recipe to database
+     * Update existing recipe with scraped data
      */
-    private async saveRecipe(
-        scrapedData: ScrapedRecipeData,
-        userId: string,
-        dish: DishIdea
-    ): Promise<Recipe> {
-        const recipe = new Recipe();
-        recipe.name = scrapedData.name || dish.dish_name;
-        recipe.url = scrapedData.url || dish.source_url || '';
-        recipe.description = dish.description || `Recipe imported from ${new URL(scrapedData.url).hostname}`;
+    private async updateRecipe(
+        recipe: Recipe,
+        scrapedData: ScrapedRecipeData
+    ): Promise<void> {
+        recipe.name = scrapedData.name || recipe.name;
+        recipe.description = scrapedData.description || recipe.description;
         recipe.instructions = scrapedData.instructions || 'Instructions not available';
         recipe.prep_time_minutes = scrapedData.prep_time_minutes || 15;
         recipe.cook_time_minutes = scrapedData.cook_time_minutes || 30;
         recipe.servings = scrapedData.servings || 4;
-        recipe.image_url = scrapedData.image_url ?? '';
-        recipe.cuisine_type = scrapedData.cuisine_type ?? dish.cuisine_type ?? '';
+        recipe.image_url = scrapedData.image_url ?? recipe.image_url;
+        recipe.cuisine_type = scrapedData.cuisine_type ?? recipe.cuisine_type;
         recipe.difficulty_level = scrapedData.difficulty_level || 'medium';
-        recipe.created_by = userId;
-        recipe.is_active = true;
-        recipe.is_public = false;
-        recipe.ai_generated = false;
 
-        return await this.recipeRepository.save(recipe);
+        await this.recipeRepository.save(recipe);
     }
 
     /**
@@ -160,7 +218,7 @@ export class RecipeEnrichmentService {
                 // Parse quantity (convert string to number if possible)
                 let quantity = 1;
                 if (ing.quantity) {
-                    const parsed = parseFloat(ing.quantity.replace(/[^\d.]/g, ''));
+                    const parsed = parseFloat(ing.quantity || "0") || 0;
                     if (!isNaN(parsed)) {
                         quantity = parsed;
                     }
@@ -184,39 +242,20 @@ export class RecipeEnrichmentService {
     }
 
     /**
-     * Update meal plan item to reference the scraped recipe
+     * Wait for recipe enrichment to complete (when another process is scraping)
      */
-    private async updateMealPlanItem(
-        mealPlanId: string,
-        dish: DishIdea,
-        recipeId: string
-    ): Promise<void> {
-        try {
-            const items = await this.mealPlanItemRepository
-                .createQueryBuilder('item')
-                .where('item.meal_plan = :mealPlanId', { mealPlanId })
-                .andWhere('item.meal_date = :mealDate', { mealDate: dish.date })
-                .andWhere('item.meal_type = :mealType', { mealType: dish.meal_type })
-                .getMany();
+    private async waitForEnrichment(recipeId: string, timeoutSeconds: number): Promise<void> {
+        const startTime = Date.now();
+        const timeout = timeoutSeconds * 1000;
 
-            if (items.length === 0) {
-                console.warn(`⚠️ No meal plan item found for ${dish.dish_name} on ${dish.date} ${dish.meal_type}`);
-                return;
-            }
-
-            // Update first matching item
-            const item = items[0];
-            await this.mealPlanItemRepository
-                .createQueryBuilder()
-                .update(MealPlanItem)
-                .set({ recipe: { id: recipeId } as any })
-                .where('id = :id', { id: item.id })
-                .execute();
-
-            console.log(`✅ Updated meal plan item for ${dish.dish_name}`);
-        } catch (error: any) {
-            console.error(`❌ Failed to update meal plan item:`, error.message);
-            throw error;
+        while (Date.now() - startTime < timeout) {
+            const ingredientsCount = await this.recipeIngredientRepository.count({
+                where: { recipe_id: recipeId }
+            });
+            
+            if (ingredientsCount > 0) return;
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
 }

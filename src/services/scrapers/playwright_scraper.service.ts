@@ -58,14 +58,13 @@ export class PlaywrightScraperService implements IRecipeScraper {
             // Wait a bit for dynamic content
             await page.waitForTimeout(2000);
 
-            // Extract content
-            const content = await this.extractContent(page);
-            
-            // Extract structured data (JSON-LD)
-            const structuredData = await this.extractStructuredData(page);
+          // Extract structured data (JSON-LD)
+          const structuredData = await this.extractStructuredData(page);
 
-            // Close browser
-            await browser.close();
+          // Extract content
+          const content = await this.extractContent(page);
+          // Close browser
+          await browser.close();
 
             // Parse with LLM
             const recipe = await this.parseWithLLM(content, structuredData, url);
@@ -164,20 +163,34 @@ ${content.slice(0, 8000)}
 
 IMPORTANT: If the page contains multiple recipes, extract ONLY THE FIRST ONE.
 
-TASK: Extract a SINGLE recipe object (not an array) with these exact fields:
-- name (string): exact recipe title
-- ingredients (array): [{name: string, quantity: string, unit: string, category_name: string (e.g., "Vegetables", "Meat", "Dairy", "Grains", "Spices")}]
-- instructions (string): step-by-step instructions as a single string
-- prep_time_minutes (number or null): preparation time in minutes
-- cook_time_minutes (number or null): cooking time in minutes  
-- total_time_minutes (number or null): total time in minutes
-- servings (number or null): number of servings
-- description (string or null): brief description
-- cuisine_type (string or null): cuisine type (e.g., "Vietnamese", "Italian")
-- difficulty_level (string or null): MUST be one of: "easy", "medium", or "hard" (lowercase)
-- image_url (string or null): main recipe image URL
+TASK: Extract complete recipe with:
+- name (exact recipe title)
+- ingredients (array of objects: {name, quantity, unit, notes, category})
+  * IMPORTANT: For each ingredient, you MUST determine and assign a "category" field
+  * Analyze the ingredient name and select the most appropriate category
+  * Examples:
+    - "cà chua" → "rau củ"
+    - "thịt bò" → "thịt"
+    - "cá hồi" → "cá hải sản"
+    - "sữa tươi" → "sữa phẩm"
+    - "gạo" → "ngũ cốc"
+    - "muối" → "gia vị"
+  * If uncertain, use "khác"
+- instructions (string: '1. Step one\\n2. Step two\\n...')
+- prep_time_minutes, cook_time_minutes, total_time_minutes (numbers or null)
+- servings (number or null)
+- description (brief description)
+- cuisine_type (string: "Việt Nam", "Ý", "Nhật" or null NOT {"Vietnamese"} no curly braces)
+- difficulty_level (easy | medium | hard or null)
+- tags (array of strings or empty array)
+- image_url (image link of recipe, string or null)
 
-Return ONLY a single recipe object as valid JSON. Do NOT wrap in array. Do NOT return multiple recipes.`;
+CRITICAL: 
+- Each ingredient object MUST include the "category" field with one of the allowed category values listed above.
+- Translate recipe name, description, ingredient names, instructions to Vietnamese if they are in another language.
+- Convert all units to metric system (grams, ml, độ C).
+
+Return ONLY valid JSON matching this structure. Extract exactly as written in source.`;
 
         const response = await this.llm.generateResponse(prompt, RecipeSchema);
         
