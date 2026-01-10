@@ -5,7 +5,7 @@ import { ScrapedRecipeData } from "../types/scraped_recipe.type";
 import { DishIdea } from "../types/dish_idea.type";
 import { Repository } from "typeorm";
 import { IngredientService } from "./ingredientService";
-import Redis from "ioredis";
+import { getSharedRedisConnection } from "../config/redis.connection";
 import { DistributedLock } from "../utils/distributedLock";
 
 /**
@@ -26,12 +26,8 @@ export class RecipeEnrichmentService {
         this.mealPlanItemRepository = db.getRepository(MealPlanItem);
         this.ingredientService = new IngredientService();
         
-        // Initialize Redis for distributed locking
-        const redis = new Redis({
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379'),
-            password: process.env.REDIS_PASSWORD || undefined,
-        });
+        // Use shared Redis connection for distributed locking
+        const redis = getSharedRedisConnection();
         this.distributedLock = new DistributedLock(redis);
     }
 
