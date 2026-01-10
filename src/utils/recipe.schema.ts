@@ -5,8 +5,8 @@ import { z } from "zod";
  */
 const scrapedIngredientSchema = z.object({
   name: z.string(),
-  quantity: z.string().optional(),
-  unit: z.string().optional(),
+  quantity: z.number().nullable().optional(),
+  unit: z.string().nullable().optional(),
   category_name: z.string().optional(),
 });
 
