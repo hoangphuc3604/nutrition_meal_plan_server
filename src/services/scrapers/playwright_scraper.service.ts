@@ -164,7 +164,7 @@ ${content.slice(0, 8000)}
 IMPORTANT: If the page contains multiple recipes, extract ONLY THE FIRST ONE.
 
 TASK: Extract complete recipe with:
-- name (exact recipe title)
+- name (recipe name, extracted from title or headings, DON'T include unecessary words like "recipe", "how to make", etc.)
 - ingredients (array of objects: {name, quantity, unit, notes, category})
   * IMPORTANT: For each ingredient, you MUST determine and assign a "category" field
   * Analyze the ingredient name and select the most appropriate category
@@ -179,9 +179,9 @@ TASK: Extract complete recipe with:
 - instructions (string: '1. Step one\\n2. Step two\\n...')
 - prep_time_minutes, cook_time_minutes, total_time_minutes (numbers or null)
 - servings (number or null)
-- description (brief description)
+- description (brief description of the recipe)
 - cuisine_type (string: "Việt Nam", "Ý", "Nhật" or null NOT {"Vietnamese"} no curly braces)
-- difficulty_level (easy | medium | hard or null)
+- difficulty_level (easy | medium | hard (choose one) or null)
 - tags (array of strings or empty array)
 - image_url (image link of recipe, string or null)
 
