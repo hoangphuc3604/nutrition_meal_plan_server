@@ -79,6 +79,17 @@ DEV_DB_USER=your_user
 DEV_DB_PORT=5432
 DEV_DB_PASSWORD=your_password
 DEV_DB_NAME=nutritiondb
+
+# Meal Plan Cron Schedule - Format: "DayMap|HH:MM|TimeZone"
+# Example: "Mon:4,Fri:3|20:48|Asia/Bangkok" - Generate 4 days after Monday, 3 days after Friday at 20:48 Asia/Bangkok time
+MEAL_PLAN_SCHEDULE=
+
+# Backend API Configuration for Meal Plan Cron
+BACKEND_GENERATE_URL=http://localhost:3000
+BACKEND_API_KEY=your_api_key_here
+
+# Batch size for processing users in cron job (optional, default: 100)
+MEAL_PLAN_BATCH_SIZE=100
 ```
 
 ### 3. Start Redis
@@ -176,6 +187,92 @@ Content-Type: application/json
    - Generates remaining 6 days
    - Saves to database
    - Logs progress
+
+## ⏰ Automated Meal Plan Cron Jobs
+
+This server supports automated meal plan generation for users at scheduled times using cron jobs.
+
+### Configuration
+
+Set the following environment variables to enable automated meal plan generation:
+
+```env
+# Cron schedule for auto-generating meal plans - Format: "DayMap|HH:MM|TimeZone"
+# Example: "Mon:4,Fri:3|20:48|Asia/Bangkok" - Generate 4 days after Monday, 3 days after Friday at 20:48 Asia/Bangkok time
+MEAL_PLAN_SCHEDULE="Mon:4,Fri:3|20:48|Asia/Bangkok"
+
+# Backend API Configuration for Meal Plan Cron
+BACKEND_GENERATE_URL=http://localhost:3000
+BACKEND_API_KEY=your_api_key_here
+
+# Batch size for processing users in cron job (optional, default: 100)
+MEAL_PLAN_BATCH_SIZE=100
+```
+
+### Schedule Format
+
+The `MEAL_PLAN_SCHEDULE` uses the format: `DayMap|HH:MM|TimeZone`
+
+- **DayMap**: Comma-separated list of `DayAbbrev:daysToGen` pairs
+  - `DayAbbrev`: `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat`, `Sun`
+  - `daysToGen`: Number of days to generate (1-7)
+- **HH:MM**: Time in 24-hour format (e.g., `20:48`)
+- **TimeZone**: Valid timezone identifier (e.g., `Asia/Bangkok`, `UTC`, `America/New_York`)
+
+### Examples
+
+```env
+# Generate 4 days after Monday, 3 days after Friday at 8:30 PM Bangkok time
+MEAL_PLAN_SCHEDULE="Mon:4,Fri:3|20:30|Asia/Bangkok"
+
+# Generate 7 days after Sunday at 6:00 AM UTC
+MEAL_PLAN_SCHEDULE="Sun:7|06:00|UTC"
+
+# Multiple schedules: 3 days after Wednesday and Saturday at 9:00 AM Eastern time
+MEAL_PLAN_SCHEDULE="Wed:3,Sat:3|09:00|America/New_York"
+```
+
+### How It Works
+
+1. **Schedule Parsing**: Server parses `MEAL_PLAN_SCHEDULE` on startup
+2. **Cron Registration**: Creates BullMQ repeat jobs for each day entry
+3. **Job Execution**: At scheduled time, worker processes all users in batches
+4. **API Calls**: Makes HTTP POST requests to `nutrition_backend` for each user
+5. **Logging**: Logs progress and any failures for monitoring
+
+### API Call Details
+
+Each user triggers a call to:
+```bash
+POST ${BACKEND_GENERATE_URL}/api/meal-plan/generate/simplify
+Headers:
+  Content-Type: application/json
+  x-api-key: ${BACKEND_API_KEY}
+Body:
+{
+  "userId": "user-id",
+  "days": 4,
+  "startDate": "2025-10-14"
+}
+```
+
+### Monitoring
+
+Check server logs for cron job execution:
+```
+[CRON] Scheduled meal plan generation for Mon (4 days) at 20:48 Asia/Bangkok
+[MEAL_PLAN_CRON] Starting meal plan generation for Mon:4 days
+[MEAL_PLAN_CRON] Found 150 users to process in batches of 100
+[MEAL_PLAN_CRON] Processing batch 1/2 (100 users)
+[MEAL_PLAN_CRON] Successfully generated 4 days meal plan for user user123
+```
+
+### Important Notes
+
+- Jobs run in the specified timezone
+- All users are processed (no filtering by user preferences)
+- Failed requests are logged but don't stop batch processing
+- Jobs use the same Redis queue as fridge expiry scans
 
 ### Queue Configuration
 
