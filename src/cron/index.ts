@@ -23,7 +23,7 @@ export const initCronJobs = async () => {
     `[CRON] Scheduled fridge expiry scan (cron=${DEFAULT_CRON}, daysBefore=${DEFAULT_DAYS}, tz=${DEFAULT_TZ})`
   );
 
-  await initMealPlanCronJobs();
+  // await initMealPlanCronJobs();
 };
 
 const initMealPlanCronJobs = async () => {

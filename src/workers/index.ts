@@ -34,10 +34,10 @@ export const initWorkers = async () => {
     workers = [
       handleUpdateImageWorker(createConnection()),
       handleUpdateRecipeImageWorker(createConnection()),
-      handleMealPlanWorker(createConnection()),
+      // handleMealPlanWorker(createConnection()),
       handlePushNotificationWorker(createConnection()),
       handleFridgeExpiryWorker(createConnection()),
-      handleRecipeEnrichmentWorker(createConnection())
+      // handleRecipeEnrichmentWorker(createConnection())
     ];
   }
 
