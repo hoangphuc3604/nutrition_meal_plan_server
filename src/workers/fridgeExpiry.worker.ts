@@ -24,6 +24,8 @@ export function handleFridgeExpiryWorker(connection: any) {
 
         return { success: true, daysBefore };
       } else if (job.name === "meal_plan_generation") {
+        console.log(`[CRON] Meal plan generation job ${job.id} skipped (disabled in worker)`);
+        /*
         const scheduleEntry: MealPlanScheduleEntry = job.data?.scheduleEntry;
 
         if (!scheduleEntry) {
@@ -37,6 +39,8 @@ export function handleFridgeExpiryWorker(connection: any) {
         await mealPlanService.processMealPlanGeneration(scheduleEntry);
 
         return { success: true, scheduleEntry };
+        */
+        return { success: true, skipped: true };
       } else {
         throw new Error(`Unknown job name: ${job.name}`);
       }
