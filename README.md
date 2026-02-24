@@ -1,18 +1,18 @@
 # 🍽️ Nutrition Meal Plan Generation Server
 
-AI-powered meal plan generation server using Google Gemini AI and BullMQ queue system.
+AI-powered meal plan generation server using Google Gemini AI.
 
 ## 🎯 Features
 
 - ✅ AI-powered meal plan generation using Google Gemini
-- ✅ Background job processing with BullMQ and Redis
-- ✅ Queue-based architecture for scalability
 - ✅ Automatic recipe creation with ingredients
 - ✅ Nutritional information tracking
 - ✅ RESTful API endpoints
 - ✅ TypeScript for type safety
 - ✅ PostgreSQL database with TypeORM
 - ✅ Health check endpoints
+- ✅ Background job processing (Image generation, Push notifications, Fridge expiry)
+- ✅ Redis for caching/queueing
 
 ## 🏗️ Architecture
 
@@ -21,12 +21,11 @@ This server works in conjunction with the main `nutrition_backend` server:
 1. **nutrition_backend** (Port 3000):
    - Generates Day 1 meal plan immediately
    - Returns response to client
-   - Enqueues remaining days to Redis queue
+   - Calls `nutrition_meal_plan_server` API for remaining days
 
 2. **nutrition_meal_plan_server** (Port 4000):
-   - Provides manual API endpoints (optional)
-   - **BullMQ Worker** picks up queued jobs
-   - Generates remaining meal plan days (2-7)
+   - Provides API endpoints for generating meal plans (days 2-7)
+   - Generates NEW recipes using AI
    - Saves to shared PostgreSQL database
 
 ## 📋 Prerequisites
@@ -62,11 +61,8 @@ API_KEY_GENERATE=your_google_gemini_api_key
 NODE_ENV=dev
 PORT=4000
 
-# Worker - Enable background job processing
+# Worker - Enable background job processing (for images, notifications, etc.)
 ENABLE_WORKER=true
-
-# Optional Unsplash → queue handoff (default false)
-ENABLE_PROCESS_IMAGE=false
 
 # Redis - Must match nutrition_backend
 REDIS_HOST=localhost
@@ -79,17 +75,6 @@ DEV_DB_USER=your_user
 DEV_DB_PORT=5432
 DEV_DB_PASSWORD=your_password
 DEV_DB_NAME=nutritiondb
-
-# Meal Plan Cron Schedule - Format: "DayMap|HH:MM|TimeZone"
-# Example: "Mon:4,Fri:3|20:48|Asia/Bangkok" - Generate 4 days after Monday, 3 days after Friday at 20:48 Asia/Bangkok time
-MEAL_PLAN_SCHEDULE=
-
-# Backend API Configuration for Meal Plan Cron
-BACKEND_GENERATE_URL=http://localhost:3000
-BACKEND_API_KEY=your_api_key_here
-
-# Batch size for processing users in cron job (optional, default: 100)
-MEAL_PLAN_BATCH_SIZE=100
 ```
 
 ### 3. Start Redis
@@ -112,7 +97,6 @@ docker run -d -p 6379:6379 redis:7-alpine
 
 ### 4. Run the Server
 
-#### Option A: Combined (API + Worker)
 ```bash
 # Development
 npm run dev
@@ -120,19 +104,6 @@ npm run dev
 # Production
 npm run build
 npm start
-```
-
-#### Option B: Separate Processes (Recommended)
-
-**Terminal 1 - API Server:**
-```bash
-# Set ENABLE_WORKER=false in .env
-npm run dev
-```
-
-**Terminal 2 - Worker Only:**
-```bash
-npm run worker
 ```
 
 ## 📡 API Endpoints
@@ -151,180 +122,21 @@ Response:
 }
 ```
 
-### Manual Meal Plan Generation (Optional)
+### Generate Remaining Days
 ```bash
 POST http://localhost:4000/api/meal-plan/generate
 Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "userId": "user-id",
-  "startDate": "2025-10-13",
   "days": 7
 }
 ```
+*Note: `userId` is extracted from the authentication token.*
 
-## 🔄 Queue System
-
-### How It Works
-
-1. **Client Request** to `nutrition_backend`:
-   ```
-   POST /api/v1/private/generate/personalized
-   {
-     "startDate": "2025-10-13",
-     "days": 7
-   }
-   ```
-
-2. **Backend Response** (Immediate):
-   - Generates Day 1 meal plan
-   - Returns to client
-   - Enqueues job for days 2-7
-
-3. **Worker Processing** (Background):
-   - Picks up job from Redis queue
-   - Generates remaining 6 days
-   - Saves to database
-   - Logs progress
-
-## ⏰ Automated Meal Plan Cron Jobs
-
-This server supports automated meal plan generation for users at scheduled times using cron jobs.
-
-### Configuration
-
-Set the following environment variables to enable automated meal plan generation:
-
-```env
-# Cron schedule for auto-generating meal plans - Format: "DayMap|HH:MM|TimeZone"
-# Example: "Mon:4,Fri:3|20:48|Asia/Bangkok" - Generate 4 days after Monday, 3 days after Friday at 20:48 Asia/Bangkok time
-MEAL_PLAN_SCHEDULE="Mon:4,Fri:3|20:48|Asia/Bangkok"
-
-# Backend API Configuration for Meal Plan Cron
-BACKEND_GENERATE_URL=http://localhost:3000
-BACKEND_API_KEY=your_api_key_here
-
-# Batch size for processing users in cron job (optional, default: 100)
-MEAL_PLAN_BATCH_SIZE=100
-```
-
-### Schedule Format
-
-The `MEAL_PLAN_SCHEDULE` uses the format: `DayMap|HH:MM|TimeZone`
-
-- **DayMap**: Comma-separated list of `DayAbbrev:daysToGen` pairs
-  - `DayAbbrev`: `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat`, `Sun`
-  - `daysToGen`: Number of days to generate (1-7)
-- **HH:MM**: Time in 24-hour format (e.g., `20:48`)
-- **TimeZone**: Valid timezone identifier (e.g., `Asia/Bangkok`, `UTC`, `America/New_York`)
-
-### Examples
-
-```env
-# Generate 4 days after Monday, 3 days after Friday at 8:30 PM Bangkok time
-MEAL_PLAN_SCHEDULE="Mon:4,Fri:3|20:30|Asia/Bangkok"
-
-# Generate 7 days after Sunday at 6:00 AM UTC
-MEAL_PLAN_SCHEDULE="Sun:7|06:00|UTC"
-
-# Multiple schedules: 3 days after Wednesday and Saturday at 9:00 AM Eastern time
-MEAL_PLAN_SCHEDULE="Wed:3,Sat:3|09:00|America/New_York"
-```
-
-### How It Works
-
-1. **Schedule Parsing**: Server parses `MEAL_PLAN_SCHEDULE` on startup
-2. **Cron Registration**: Creates BullMQ repeat jobs for each day entry
-3. **Job Execution**: At scheduled time, worker processes all users in batches
-4. **API Calls**: Makes HTTP POST requests to `nutrition_backend` for each user
-5. **Logging**: Logs progress and any failures for monitoring
-
-### API Call Details
-
-Each user triggers a call to:
+### Server Status
 ```bash
-POST ${BACKEND_GENERATE_URL}/api/meal-plan/generate/simplify
-Headers:
-  Content-Type: application/json
-  x-api-key: ${BACKEND_API_KEY}
-Body:
-{
-  "userId": "user-id",
-  "days": 4,
-  "startDate": "2025-10-14"
-}
-```
-
-### Monitoring
-
-Check server logs for cron job execution:
-```
-[CRON] Scheduled meal plan generation for Mon (4 days) at 20:48 Asia/Bangkok
-[MEAL_PLAN_CRON] Starting meal plan generation for Mon:4 days
-[MEAL_PLAN_CRON] Found 150 users to process in batches of 100
-[MEAL_PLAN_CRON] Processing batch 1/2 (100 users)
-[MEAL_PLAN_CRON] Successfully generated 4 days meal plan for user user123
-```
-
-### Important Notes
-
-- Jobs run in the specified timezone
-- All users are processed (no filtering by user preferences)
-- Failed requests are logged but don't stop batch processing
-- Jobs use the same Redis queue as fridge expiry scans
-
-### Queue Configuration
-
-**Queue Name:** `generate_week`
-
-**Job Data:**
-```typescript
-{
-  userId: string;
-  startDate: string;      // YYYY-MM-DD
-  numDays: number;        // Usually 6
-  initialMealPlan: {
-    id: string;
-    startDate: string;
-    endDate: string;
-  }
-}
-```
-
-**Job Options:**
-- Attempts: 3 with exponential backoff
-- Concurrency: 2 workers simultaneously
-- Rate limit: 5 jobs per 60 seconds
-- Retention: 24 hours for completed, 7 days for failed
-
-### Check Worker Status
-
-```bash
-# View logs
-npm run dev
-# Look for: "✅ Worker ready and listening"
-```
-
-### Monitor Queue
-
-#### Redis CLI:
-```bash
-# Check waiting jobs
-redis-cli LLEN bull:generate_week:wait
-
-# Check active jobs
-redis-cli LLEN bull:generate_week:active
-
-# Check failed jobs
-redis-cli LLEN bull:generate_week:failed
-```
-
-#### Bull Board (Web UI):
-```bash
-npm install -g @bull-board/cli
-bull-board
-# Visit: http://localhost:3000
+GET http://localhost:4000/api/meal-plan/status
 ```
 
 ## 🛠️ Development
@@ -337,7 +149,8 @@ src/
 ├── index.ts                    # Server entry point
 ├── config/
 │   ├── database.ts            # TypeORM configuration
-│   └── db.config.ts           # Database connection config
+│   ├── db.config.ts           # Database connection config
+│   ├── redis.connection.ts    # Redis connection
 ├── controllers/
 │   └── mealPlan.controller.ts # API controllers
 ├── models/                     # TypeORM entities
@@ -352,88 +165,23 @@ src/
 │   ├── mealPlanService.ts     # Meal plan generation logic
 │   ├── llmService.ts          # Google Gemini integration
 │   ├── ingredientService.ts   # Ingredient management
+│   ├── imageUploadService.ts # Image upload handling
 │   └── categoryService.ts     # Category management
 ├── workers/
-│   └── mealPlanWorker.ts      # BullMQ worker
+│   ├── image.worker.ts        # Image processing worker
+│   ├── recipe.image.worker.ts # Recipe image processing worker
+│   ├── pushNotificationWorker.ts # Push notification worker
+│   └── fridgeExpiry.worker.ts # Fridge expiry scanning worker
 └── utils/
     ├── prompt.builder.ts      # AI prompt construction
-    └── auth.util.ts           # Authentication utilities
+    └── meal_plan_generator.util.ts # Meal plan generation helper
 ```
 
 ### Adding New Features
 
 1. **Modify AI prompts:** Edit `utils/prompt.builder.ts`
-2. **Change worker behavior:** Edit `workers/mealPlanWorker.ts`
-3. **Add API endpoints:** Edit `routes/mealPlan.routes.ts`
-4. **Modify generation logic:** Edit `services/mealPlanService.ts`
-
-## 🔧 Troubleshooting
-
-### Worker Not Processing Jobs
-
-**Problem:** Jobs are enqueued but not processed
-
-**Solutions:**
-
-1. **Check worker is enabled:**
-   ```env
-   ENABLE_WORKER=true
-   ```
-
-2. **Check Redis connection:**
-   ```bash
-   redis-cli ping
-   # Should return: PONG
-   ```
-
-3. **Check queue name matches:**
-   - Backend: `mealQueue = new Queue("generate_week")`
-   - Worker: `new Worker("generate_week")`
-
-4. **Check logs for errors:**
-   ```bash
-   npm run dev
-   # Look for [WORKER] or [ERROR] messages
-   ```
-
-5. **Verify Redis configuration matches between servers:**
-   ```env
-   # Both nutrition_backend and nutrition_meal_plan_server
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
-   ```
-
-### Database Connection Failed
-
-1. **Check database is running:**
-   ```bash
-   psql -h localhost -U your_user -d nutritiondb
-   ```
-
-2. **Verify credentials in `.env`**
-
-3. **Check network connectivity:**
-   ```bash
-   nc -zv localhost 5432
-   ```
-
-### AI Rate Limiting
-
-If you see "429 Too Many Requests":
-
-1. **Reduce worker concurrency:**
-   ```typescript
-   // In mealPlanWorker.ts
-   { concurrency: 1 }
-   ```
-
-2. **Increase rate limit duration:**
-   ```typescript
-   limiter: {
-     max: 3,
-     duration: 60000
-   }
-   ```
+2. **Add API endpoints:** Edit `routes/mealPlan.routes.ts`
+3. **Modify generation logic:** Edit `services/mealPlanService.ts`
 
 ## 🔒 Security Notes
 
@@ -442,7 +190,6 @@ If you see "429 Too Many Requests":
 - Use environment variables for all secrets
 - Enable Redis password in production
 - Use HTTPS in production
-- Implement rate limiting on API endpoints
 
 ## 📝 Scripts
 
@@ -450,23 +197,10 @@ If you see "429 Too Many Requests":
 npm run dev       # Start in development mode with auto-reload
 npm run build     # Build TypeScript to JavaScript
 npm start         # Start production server
-npm run worker    # Start worker only (separate process)
 ```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/my-feature`
-3. Commit changes: `git commit -am 'Add feature'`
-4. Push to branch: `git push origin feature/my-feature`
-5. Submit pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details
 
 ## 🙏 Acknowledgments
 
 - Google Gemini AI for meal plan generation
-- BullMQ for robust queue system
 - TypeORM for database management
+- Redis for caching and queues
