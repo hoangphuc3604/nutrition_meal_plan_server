@@ -6,6 +6,21 @@ const DEFAULT_CRON = process.env.FRIDGE_SCAN_CRON || "0 9 * * *";
 const DEFAULT_DAYS = parseInt(process.env.FRIDGE_EXPIRY_DAYS_BEFORE || "1", 10);
 const DEFAULT_TZ = process.env.FRIDGE_SCAN_TZ || "UTC";
 
+const getNextCronDate = (cronPattern: string, tz: string): Date => {
+  const [minute, hour] = cronPattern.split(" ");
+  
+  const nowInTz = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+  
+  const nextInTz = new Date(nowInTz);
+  nextInTz.setHours(parseInt(hour, 10), parseInt(minute, 10), 0, 0);
+  
+  if (nextInTz <= nowInTz) {
+    nextInTz.setDate(nextInTz.getDate() + 1);
+  }
+  
+  return nextInTz;
+};
+
 export const initCronJobs = async () => {
   await fridgeScanQueue.add(
     "fridge_expiry_scan",
@@ -20,7 +35,7 @@ export const initCronJobs = async () => {
   );
 
   console.log(
-    `[CRON] Scheduled fridge expiry scan (cron=${DEFAULT_CRON}, daysBefore=${DEFAULT_DAYS}, tz=${DEFAULT_TZ})`
+    `[CRON] Scheduled fridge expiry scan (cron=${DEFAULT_CRON}, tz=${DEFAULT_TZ})`
   );
 
   // await initMealPlanCronJobs();
