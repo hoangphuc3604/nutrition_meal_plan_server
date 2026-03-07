@@ -31,38 +31,40 @@ class PushNotificationService {
       return;
     }
 
-    const messages = deviceTokens
-      .filter(token => Expo.isExpoPushToken(token.token))
-      .map(token => ({
-        to: token.token,
-        sound: "default" as const,
-        title: "Thông báo thực phẩm",
-        body: message,
-        data: {
-          notificationId,
-          type,
-          userId,
-        },
-      }));
+    const validTokens = deviceTokens.filter(token => Expo.isExpoPushToken(token.token));
 
-    if (messages.length === 0) {
+    if (validTokens.length === 0) {
       console.log(`[WARN] No valid Expo push tokens for user ${userId}`);
       return;
     }
 
-    const chunks = this.expo.chunkPushNotifications(messages);
-    const tickets = [];
+    const messages = validTokens.map(token => ({
+      to: token.token,
+      sound: "default" as const,
+      title: "Thông báo thực phẩm",
+      body: message,
+      data: {
+        notificationId,
+        type,
+        userId,
+      },
+    }));
 
-    for (const chunk of chunks) {
+    const tickets: any[] = [];
+
+    for (const msg of messages) {
       try {
-        const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
+        const ticketChunk = await this.expo.sendPushNotificationsAsync([msg]);
         tickets.push(...ticketChunk);
-      } catch (error) {
-        console.error("[ERROR] Error sending push chunk:", error);
+      } catch (error: any) {
+        console.error("[ERROR] Error sending push to token:", error);
+        if (error.code === 'PUSH_TOO_MANY_EXPERIENCE_IDS') {
+          console.log(`[WARN] Skipping token due to project mismatch: ${msg.to}`);
+        }
       }
     }
 
-    await this.handleTicketResponses(tickets, deviceTokens);
+    await this.handleTicketResponses(tickets, validTokens);
     await this.updateNotificationStatus(notificationId);
   }
 

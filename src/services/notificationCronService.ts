@@ -14,6 +14,28 @@ const formatDateInTimeZone = (date: Date, timeZone: string): string => {
   });
 };
 
+const generateExpiryMessage = (scheduledDate: string, oldMessage: string): string => {
+  if (!scheduledDate) {
+    return oldMessage;
+  }
+
+  const expiryDate = new Date(scheduledDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expiryDate.setHours(0, 0, 0, 0);
+
+  const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  const foodNameMatch = oldMessage.match(/Thực phẩm\s*"([^"]+)"/);
+  const foodName = foodNameMatch ? foodNameMatch[1] : '';
+
+  if (foodName) {
+    return `Thực phẩm "${foodName}" sẽ hết hạn vào ${expiryDate.toLocaleDateString('vi-VN')} (còn ${daysUntilExpiry} ngày)`;
+  }
+
+  return `Thực phẩm sẽ hết hạn vào ${expiryDate.toLocaleDateString('vi-VN')} (còn ${daysUntilExpiry} ngày)`;
+};
+
 class NotificationCronService {
   private notificationRepository: Repository<Notification>;
   private pushService: PushNotificationService;
@@ -47,10 +69,12 @@ class NotificationCronService {
 
     for (const notification of pending) {
       try {
+        const dynamicMessage = generateExpiryMessage(notification.scheduled_date, notification.message);
+        
         await this.pushService.sendPushNotification(
           notification.user.id,
           notification.id,
-          notification.message,
+          dynamicMessage,
           notification.type
         );
       } catch (error: any) {
